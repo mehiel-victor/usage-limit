@@ -103,7 +103,13 @@ def codex_executable() -> str:
     raise FileNotFoundError("Codex executable was not found")
 
 
-def read_codex_limits(home: str = "") -> list[UsageLimit]:
+def read_codex_app_server(
+    method: str,
+    params: Any,
+    home: str = "",
+    timeout: int = DEFAULT_TIMEOUT,
+) -> dict[str, Any]:
+    """Read one JSON-RPC method from a short-lived local Codex app server."""
     environment = os.environ.copy()
     if home:
         environment["CODEX_HOME"] = home
@@ -127,8 +133,8 @@ def read_codex_limits(home: str = "") -> list[UsageLimit]:
         {
             "jsonrpc": "2.0",
             "id": 2,
-            "method": "account/rateLimits/read",
-            "params": None,
+            "method": method,
+            "params": params,
         },
     )
     try:
@@ -137,7 +143,7 @@ def read_codex_limits(home: str = "") -> list[UsageLimit]:
         with selectors.DefaultSelector() as selector:
             selector.register(process.stdout, selectors.EVENT_READ)
             buffered = b""
-            deadline = time.monotonic() + DEFAULT_TIMEOUT
+            deadline = time.monotonic() + timeout
             while time.monotonic() < deadline:
                 events = selector.select(max(0, deadline - time.monotonic()))
                 if not events:
@@ -156,10 +162,10 @@ def read_codex_limits(home: str = "") -> list[UsageLimit]:
                         result = response.get("result")
                         if not isinstance(result, dict):
                             raise ValueError(
-                                "Codex did not return usage-limit data"
+                                f"Codex returned invalid data for {method}"
                             )
-                        return parse_codex_limits(result)
-        raise TimeoutError("Timed out while loading Codex usage limits")
+                        return result
+        raise TimeoutError(f"Timed out while reading {method}")
     finally:
         process.terminate()
         try:
@@ -167,6 +173,11 @@ def read_codex_limits(home: str = "") -> list[UsageLimit]:
         except subprocess.TimeoutExpired:
             process.kill()
             process.wait(timeout=1)
+
+
+def read_codex_limits(home: str = "") -> list[UsageLimit]:
+    result = read_codex_app_server("account/rateLimits/read", None, home)
+    return parse_codex_limits(result)
 
 
 def antigravity_executable() -> str:
