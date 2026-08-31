@@ -14,6 +14,9 @@ windows, pinning, click-through, resize, theme detection, position persistence,
 minimize/close, low-limit notifications, and a compact `C | A` toggle for
 switching the displayed provider. Provider failures are tolerated
 when another provider returns limits.
+Drag the widget across monitor boundaries, or use `Mover para outro monitor`
+in the context menu to cycle through connected displays while preserving its
+relative screen position. The selected position is persisted immediately.
 When click-through mode is enabled, the desktop receives clicks through the
 donut; the floating controls remain interactive so the mode can be disabled.
 
@@ -68,3 +71,14 @@ Optional Codex profiles belong in
 ```
 
 The former `codex-token-window/config.json` remains a read-only fallback.
+
+## Mostrar no lockscreen do Linux
+
+No menu de contexto, ative `Exibir no lockscreen`. O Usage Limit publicará uma
+notificação residente somente quando um chat entrar em um estado não lido:
+concluído, aguardando ação, bloqueado ou com falha. Atualizações periódicas não
+republicam a notificação; depois de dispensada ou aberta, ela só volta em uma
+nova transição. A notificação inclui os limites atuais e os chats afetados.
+Ambientes como GNOME e KDE podem ocultar o conteúdo das notificações na tela
+bloqueada. Nesse caso, habilite notificações no lockscreen nas configurações de
+privacidade do ambiente.

@@ -88,6 +88,24 @@ def critical_colors(colors: ThemeColors) -> ThemeColors:
     )
 
 
+def _relative_luminance(color: str) -> float:
+    channels = [int(color[index : index + 2], 16) / 255 for index in (1, 3, 5)]
+    linear = [value / 12.92 if value <= 0.04045 else ((value + 0.055) / 1.055) ** 2.4 for value in channels]
+    return linear[0] * 0.2126 + linear[1] * 0.7152 + linear[2] * 0.0722
+
+
+def _contrast_ratio(foreground: str, background: str) -> float:
+    lighter, darker = sorted((_relative_luminance(foreground), _relative_luminance(background)), reverse=True)
+    return (lighter + 0.05) / (darker + 0.05)
+
+
+def adaptive_text_color(text_color: str, background_color: str, minimum_contrast: float = 4.5) -> str:
+    if _contrast_ratio(text_color, background_color) >= minimum_contrast:
+        return text_color
+    candidates = ("#202124", "#F7F9FC")
+    return max(candidates, key=lambda color: _contrast_ratio(color, background_color))
+
+
 def system_prefers_dark(color_scheme: str, gtk_theme: str = "", gtk_prefers_dark: bool = False) -> bool:
     if color_scheme == "prefer-light":
         return False
@@ -136,6 +154,7 @@ def _draw_text(
     center_y: float,
     font: str,
     color: str,
+    background_color: Optional[str] = None,
     max_width: Optional[int] = None,
     center_x: Optional[float] = None,
 ) -> None:
@@ -147,7 +166,8 @@ def _draw_text(
         layout.set_ellipsize(Pango.EllipsizeMode.END)
     width, height = layout.get_pixel_size()
     context.move_to((center_x if center_x is not None else WIDGET_SIZE / 2) - width / 2, center_y - height / 2)
-    _set_color(context, color)
+    effective_color = color if background_color is None else adaptive_text_color(color, background_color)
+    _set_color(context, effective_color)
     PangoCairo.show_layout(context, layout)
 
 
@@ -261,6 +281,39 @@ def clamp_window_position(
     return safe_x, safe_y
 
 
+def next_monitor_position(
+    x: int,
+    y: int,
+    width: int,
+    height: int,
+    workareas: list[tuple[int, int, int, int]],
+) -> tuple[int, int]:
+    """Move to the next monitor while preserving the relative screen position."""
+    areas = sorted(
+        (area for area in workareas if area[2] > 0 and area[3] > 0),
+        key=lambda area: (area[0], area[1]),
+    )
+    if len(areas) < 2:
+        return x, y
+
+    def overlap(area: tuple[int, int, int, int]) -> int:
+        area_x, area_y, area_width, area_height = area
+        overlap_width = max(0, min(x + width, area_x + area_width) - max(x, area_x))
+        overlap_height = max(0, min(y + height, area_y + area_height) - max(y, area_y))
+        return overlap_width * overlap_height
+
+    current_index = max(range(len(areas)), key=lambda index: overlap(areas[index]))
+    current = areas[current_index]
+    target = areas[(current_index + 1) % len(areas)]
+    current_range_x = max(1, current[2] - width)
+    current_range_y = max(1, current[3] - height)
+    relative_x = max(0.0, min(1.0, (x - current[0]) / current_range_x))
+    relative_y = max(0.0, min(1.0, (y - current[1]) / current_range_y))
+    target_x = target[0] + round(relative_x * max(0, target[2] - width))
+    target_y = target[1] + round(relative_y * max(0, target[3] - height))
+    return target_x, target_y
+
+
 def _draw_icon_control(
     context: Any,
     name: str,
@@ -345,5 +398,13 @@ def _draw_controls(
             _set_color(context, colors.control_active)
             context.fill()
         color = colors.primary if active and enabled else colors.icon if enabled else colors.tertiary
-        _draw_text(context, "C" if index == 0 else "A", toggle_y, "Sans Bold 8", color, center_x=left + 11)
+        _draw_text(
+            context,
+            "C" if index == 0 else "A",
+            toggle_y,
+            "Sans Bold 8",
+            color,
+            background_color=colors.background,
+            center_x=left + 11,
+        )
     _draw_utility_controls(context, pinned, click_through, hovered, colors)

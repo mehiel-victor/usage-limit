@@ -22,7 +22,7 @@ except (ImportError, ValueError):
     Pango = PangoCairo = None  # type: ignore[assignment]
 
 from task_sources import ATTENTION_STATUSES, MonitoredTask
-from usage_limit_view import theme_colors
+from usage_limit_view import adaptive_text_color, theme_colors
 
 BASE_WIDTH = 240
 BASE_HEIGHT = 380
@@ -48,6 +48,7 @@ STATUS_LABELS = {
     "completed": "concluída",
     "queued": "na fila",
 }
+TRANSPARENT_TEXT = "#757575"
 
 
 def visible_tasks(tasks: list[MonitoredTask], mode: str) -> list[MonitoredTask]:
@@ -78,6 +79,7 @@ def _text(
     y: float,
     font: str,
     color: str,
+    background_color: Optional[str] = None,
     width: Optional[int] = None,
 ) -> None:
     layout = PangoCairo.create_layout(context)
@@ -88,7 +90,8 @@ def _text(
         layout.set_ellipsize(Pango.EllipsizeMode.END)
     pixel_width, pixel_height = layout.get_pixel_size()
     context.move_to(x - pixel_width / 2, y - pixel_height / 2)
-    _set_color(context, color)
+    effective_color = color if background_color is None else adaptive_text_color(color, background_color)
+    _set_color(context, effective_color)
     PangoCairo.show_layout(context, layout)
 
 
@@ -114,6 +117,12 @@ def draw_mode_toggle(context: Any, mode: str, hovered: Optional[str], dark_mode:
             context.restore()
     for index, (value, label) in enumerate(labels):
         left = x + index * item_width
+        if selected_mode == value:
+            label_background = palette.control_active
+        elif hovered == f"mode:{value}":
+            label_background = palette.control_hover
+        else:
+            label_background = palette.control
         _text(
             context,
             label,
@@ -121,6 +130,7 @@ def draw_mode_toggle(context: Any, mode: str, hovered: Optional[str], dark_mode:
             y + height / 2,
             "Sans Bold 7",
             palette.primary if selected_mode == value else palette.secondary,
+            background_color=label_background,
         )
 
 
@@ -187,8 +197,9 @@ def _draw_center(
     else:
         main = f"{len(all_tasks)} tarefas"
         detail = f"{attention} precisam de você"
-    _text(context, main, 120, 180, "Sans Bold 15", palette.primary, 174)
-    _text(context, detail, 120, 202, "Sans 7.5", palette.secondary, 150)
+    detail_color = "#D7DEE8" if dark_mode else "#374151"
+    _text(context, main, 120, 180, "Sans Bold 15", palette.primary, palette.background, 174)
+    _text(context, detail, 120, 202, "Sans Medium 8.5", detail_color, palette.background, 160)
     if any(task.status == "running" for task in all_tasks):
         context.new_path()
         _set_color(context, "#2F80ED")
@@ -234,21 +245,20 @@ def _draw_attention_button(
     _set_color(context, "#E33D43")
     context.arc(badge_x, badge_y, 8, 0, math.tau)
     context.fill()
-    _text(context, str(attention_count), badge_x, badge_y, "Sans Bold 6.5", "#FFFFFF")
+    _text(context, str(attention_count), badge_x, badge_y, "Sans Bold 6.5", "#FFFFFF", "#E33D43")
 
 
 def _draw_legend(context: Any, tasks: list[MonitoredTask], dark_mode: bool) -> None:
     counts = Counter(task.status for task in tasks)
     counts["failed"] += counts["blocked"]
-    palette = theme_colors(dark_mode)
     _text(
         context,
         f"{len(tasks)} tarefas monitoradas",
         120,
         310,
-        "Sans 6",
-        palette.secondary,
-        180,
+        "Sans Bold 7",
+        TRANSPARENT_TEXT,
+        width=180,
     )
     legend = (
         ("running", "executando"),
@@ -280,9 +290,9 @@ def _draw_legend(context: Any, tasks: list[MonitoredTask], dark_mode: bool) -> N
                 f"{counts[status]} {label}",
                 center_x + 8,
                 center_y,
-                "Sans 6",
-                palette.secondary,
-                max(45, round(slot_width - 22)),
+                "Sans Medium 7",
+                TRANSPARENT_TEXT,
+                width=max(45, round(slot_width - 22)),
             )
 
 
@@ -308,8 +318,8 @@ def draw_task_status(
     draw_mode_toggle(context, mode, hovered, dark_mode)
     if error:
         palette = theme_colors(dark_mode)
-        _text(context, "Sem acesso às tarefas", 120, 180, "Sans Bold 12", palette.primary, 180)
-        _text(context, "Clique para atualizar", 120, 202, "Sans 8", palette.secondary)
+        _text(context, "Sem acesso às tarefas", 120, 180, "Sans Bold 12", palette.primary, palette.background, 180)
+        _text(context, "Clique para atualizar", 120, 202, "Sans 8", palette.secondary, palette.background)
     else:
         _draw_ring(context, shown, selected, dark_mode)
         _draw_center(context, tasks, shown, mode, dark_mode)

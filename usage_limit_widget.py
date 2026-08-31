@@ -7,6 +7,7 @@ import fcntl
 import json
 import math
 import os
+import shutil
 import subprocess
 import threading
 import time
@@ -46,6 +47,7 @@ from usage_limit_view import (
     control_region,
     critical_colors,
     format_reset_date,
+    next_monitor_position,
     outward_resize_delta,
     system_prefers_dark,
     theme_colors,
@@ -69,11 +71,71 @@ except (ImportError, ValueError):
     Gdk = Gio = GLib = Gtk = None  # type: ignore[assignment]
 
 POSITION_FILE = Path(os.environ.get("XDG_STATE_HOME", str(Path.home() / ".local" / "state"))) / "usage-limit" / "position.json"
+LOCKSCREEN_FILE = Path(os.environ.get("XDG_STATE_HOME", str(Path.home() / ".local" / "state"))) / "usage-limit" / "lockscreen.json"
 LEGACY_POSITION_FILE = Path.home() / ".codex" / "token_widget_position.json"
 RUNTIME_ROOT = os.environ.get("XDG_RUNTIME_DIR") or os.environ.get("XDG_CACHE_HOME", str(Path.home() / ".cache"))
 LOCK_FILE = Path(RUNTIME_ROOT) / "usage-limit" / "widget.lock"
 REFRESH_MS = 5 * 60_000
 TASK_REFRESH_MS = 3_000
+UNREAD_TRIGGER_STATUSES = frozenset({"waiting_for_user", "blocked", "failed", "completed"})
+
+
+def notify_lockscreen(message: str, replace_id: int = 0) -> int:
+    """Publish a resident notification and return its server identifier."""
+    executable = shutil.which("notify-send")
+    if not executable:
+        return 0
+    command = [
+        executable,
+        "--print-id",
+        "--app-name=Usage Limit",
+        "--hint", "boolean:resident:true",
+        "--hint", "string:desktop-entry:io.github.mehiel.UsageLimit",
+        "--urgency=normal",
+    ]
+    if replace_id:
+        command.extend(("--replace-id", str(replace_id)))
+    result = subprocess.run(
+        [*command, "Chats não lidos", message],
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=3,
+    )
+    try:
+        return int(result.stdout.strip())
+    except ValueError:
+        return 0
+
+
+def format_lockscreen_status(limits: list[UsageLimit], tasks: list[MonitoredTask]) -> str:
+    """Build a concise notification containing limits and unread tasks."""
+    usage = " · ".join(
+        f"{limit.provider}: {limit.remaining_percent}%"
+        for limit in limits[:2]
+    ) or "Limites indisponíveis"
+    if not tasks:
+        return f"{usage}\nNenhum chat não lido"
+    lines = [
+        f"• {task.title} ({task.current_activity})"
+        for task in tasks[:5]
+    ]
+    if len(tasks) > 5:
+        lines.append(f"(+{len(tasks) - 5} outros)")
+    return f"{usage}\n" + "\n".join(lines)
+
+
+def unread_task_transitions(
+    previous_statuses: dict[str, str],
+    tasks: list[MonitoredTask],
+) -> list[MonitoredTask]:
+    """Return tasks that just entered a status requiring the user's attention."""
+    return [
+        task
+        for task in tasks
+        if task.status in UNREAD_TRIGGER_STATUSES
+        and previous_statuses.get(task.id) != task.status
+    ]
 
 def log_debug(message: str) -> None:
     if os.environ.get("USAGE_LIMIT_DEBUG") != "1":
@@ -113,15 +175,16 @@ def draw_widget(
 
     selected_limit = limits[selected] if limits and not error else None
     is_alternate = selected_limit is not None and selected_limit.window != "session"
+    panel_background = colors.alternate_background if is_alternate else colors.background
     context.new_path()
-    _set_color(context, colors.alternate_background if is_alternate else colors.background)
+    _set_color(context, panel_background)
     context.arc(120, 120, 112, 0, math.tau)
     context.fill()
 
     if error or not limits:
-        _draw_text(context, "—", 107, "Sans Bold 34", colors.primary)
-        _draw_text(context, "Não foi possível atualizar", 139, "Sans 9", colors.secondary)
-        _draw_text(context, "Clique para tentar novamente", 163, "Sans 8", colors.tertiary)
+        _draw_text(context, "—", 107, "Sans Bold 34", colors.primary, background_color=panel_background)
+        _draw_text(context, "Não foi possível atualizar", 139, "Sans 9", colors.secondary, background_color=panel_background)
+        _draw_text(context, "Clique para tentar novamente", 163, "Sans 8", colors.tertiary, background_color=panel_background)
         context.restore()
         _draw_controls(context, pinned, click_through, hovered_control, colors, active_provider, available_providers or set())
         return
@@ -130,18 +193,19 @@ def draw_widget(
     window_label = {"session": "sessão", "weekly": "semanal", "5h": "5 horas"}.get(limit.window, limit.window)
     _draw_usage_ring(context, limit.remaining_percent, colors, critical)
     label_color = colors.alternate_label if is_alternate else colors.label
-    _draw_text(context, limit.provider, 61, "Sans Bold 8", label_color, 190)
+    _draw_text(context, limit.provider, 61, "Sans Bold 8", label_color, background_color=panel_background, max_width=190)
     _draw_text(
         context,
         f"{limit.name} · {window_label}",
         73,
         "Sans 7",
         label_color,
-        200,
+        background_color=panel_background,
+        max_width=200,
     )
-    _draw_text(context, f"{limit.remaining_percent}%", 111, "Sans Bold 26", colors.primary)
-    _draw_text(context, "restante", 137, "Sans 8", colors.secondary)
-    _draw_text(context, format_reset_date(limit.resets_at), 163, "Sans 7", colors.tertiary)
+    _draw_text(context, f"{limit.remaining_percent}%", 111, "Sans Bold 26", colors.primary, background_color=panel_background)
+    _draw_text(context, "restante", 137, "Sans 8", colors.secondary, background_color=panel_background)
+    _draw_text(context, format_reset_date(limit.resets_at), 163, "Sans 7", colors.tertiary, background_color=panel_background)
 
     dot_gap = 10
     start_x = 120 - (len(limits) - 1) * dot_gap / 2
@@ -190,6 +254,10 @@ class UsageLimitWidget(Gtk.Window if Gtk is not None else object):
         self._task_refreshing = False
         self._selected_task = 0
         self._attention_window: Optional[Any] = None
+        self._lockscreen_enabled = self._load_lockscreen_preference()
+        self._known_task_statuses: dict[str, str] = {}
+        self._task_statuses_initialized = False
+        self._lockscreen_notification_id = 0
 
         self.set_title("Usage Limit")
         self.set_icon_name("usage-limit")
@@ -397,6 +465,14 @@ class UsageLimitWidget(Gtk.Window if Gtk is not None else object):
             account = Gtk.MenuItem.new_with_label("Alternar conta do Codex")
             account.connect("activate", lambda _item: self._next_account())
             menu.append(account)
+        lockscreen = Gtk.CheckMenuItem.new_with_label("Exibir no lockscreen")
+        lockscreen.set_active(self._lockscreen_enabled)
+        lockscreen.connect("toggled", self._toggle_lockscreen)
+        menu.append(lockscreen)
+        move_monitor = Gtk.MenuItem.new_with_label("Mover para outro monitor")
+        move_monitor.set_sensitive(len(self._monitor_workareas()) > 1)
+        move_monitor.connect("activate", lambda _item: self._move_to_next_monitor())
+        menu.append(move_monitor)
         menu.append(Gtk.SeparatorMenuItem())
         minimize = Gtk.MenuItem.new_with_label("Minimizar")
         minimize.connect("activate", lambda _item: self._minimize())
@@ -408,11 +484,39 @@ class UsageLimitWidget(Gtk.Window if Gtk is not None else object):
         menu.show_all()
         return menu
 
+    def _load_lockscreen_preference(self) -> bool:
+        try:
+            value = json.loads(LOCKSCREEN_FILE.read_text(encoding="utf-8"))
+            return bool(value.get("enabled")) if isinstance(value, dict) else False
+        except (OSError, ValueError):
+            return False
+
+    def _toggle_lockscreen(self, item: Any) -> None:
+        self._lockscreen_enabled = bool(item.get_active())
+        try:
+            LOCKSCREEN_FILE.parent.mkdir(parents=True, exist_ok=True)
+            LOCKSCREEN_FILE.write_text(
+                json.dumps({"enabled": self._lockscreen_enabled}) + "\n",
+                encoding="utf-8",
+            )
+        except OSError:
+            return
+
+    def _publish_lockscreen(self, unread_tasks: list[MonitoredTask]) -> None:
+        if not self._lockscreen_enabled or not unread_tasks:
+            return
+        self._lockscreen_notification_id = notify_lockscreen(
+            format_lockscreen_status(self._all_limits, unread_tasks),
+            self._lockscreen_notification_id,
+        )
+
     def _next_account(self) -> None:
         self._profile_index = (self._profile_index + 1) % len(self._profiles)
         self._task_source.close()
         self._task_source = CodexTaskSource(self._profiles[self._profile_index]["home"])
         self._task_refreshing = False
+        self._known_task_statuses = {}
+        self._task_statuses_initialized = False
         self._all_limits = []
         self._limits = []
         self._error = False
@@ -650,6 +754,19 @@ class UsageLimitWidget(Gtk.Window if Gtk is not None else object):
         _screen, pointer_x, pointer_y = pointer.get_position()
         return pointer_x, pointer_y
 
+    def _move_to_next_monitor(self) -> None:
+        x, y = self.get_position()
+        width, height = self.get_size()
+        target_x, target_y = next_monitor_position(
+            x,
+            y,
+            width,
+            height,
+            self._monitor_workareas(),
+        )
+        self.move(target_x, target_y)
+        self._save_position((target_x, target_y))
+
     def _ensure_visible(self) -> bool:
         self._visibility_check_pending = False
         if not self.get_realized():
@@ -757,10 +874,10 @@ class UsageLimitWidget(Gtk.Window if Gtk is not None else object):
         except (OSError, ValueError, KeyError, TypeError):
             self.move(24, 24)
 
-    def _save_position(self) -> None:
+    def _save_position(self, position: Optional[tuple[int, int]] = None) -> None:
         try:
             self._position_file.parent.mkdir(parents=True, exist_ok=True)
-            x, y = self.get_position()
+            x, y = position or self.get_position()
             state = {
                 "x": x,
                 "y": y,
@@ -873,7 +990,12 @@ class UsageLimitWidget(Gtk.Window if Gtk is not None else object):
         changed = error != self._task_error
         self._task_error = error
         if not error:
+            unread_tasks = unread_task_transitions(self._known_task_statuses, tasks)
+            self._known_task_statuses.update({task.id: task.status for task in tasks})
             self._tasks = tasks
+            if self._task_statuses_initialized:
+                self._publish_lockscreen(unread_tasks)
+            self._task_statuses_initialized = True
             changed = changed or previous_signature != self._task_visual_signature(tasks)
             shown = visible_tasks(tasks, self._view_mode)
             self._selected_task = min(self._selected_task, max(0, len(shown) - 1))
