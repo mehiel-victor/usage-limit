@@ -14,6 +14,9 @@ windows, pinning, click-through, resize, theme detection, position persistence,
 minimize/close, low-limit notifications, and a compact `C | A` toggle for
 switching the displayed provider. Provider failures are tolerated
 when another provider returns limits.
+The resize limit follows the usable dimensions of the widget's current monitor
+rather than a fixed pixel cap. Each view keeps its own aspect ratio so the full
+interface remains visible at maximum size.
 Use the chevron control or `Recolher na borda` in the context menu to collapse
 the widget into two provider capsules fixed to the right edge of the current
 monitor. Each capsule keeps the provider logo, remaining percentage, and a

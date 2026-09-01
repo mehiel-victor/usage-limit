@@ -28,7 +28,6 @@ WIDGET_HEIGHT = 360
 USAGE_WIDGET_HEIGHT = 328
 CONTENT_OFFSET_Y = 56
 MIN_WIDGET_SIZE = 180
-MAX_WIDGET_SIZE = 360
 PROVIDER_TOGGLE = (120, 311)
 PASSTHROUGH_CONTROL = (78, 13)
 PIN_CONTROL = (106, 13)
@@ -219,8 +218,28 @@ def control_at(x: float, y: float) -> Optional[str]:
     return None
 
 
-def clamp_widget_size(size: float) -> int:
-    return max(MIN_WIDGET_SIZE, min(MAX_WIDGET_SIZE, round(size)))
+def clamp_widget_size(
+    size: float,
+    view_mode: str,
+    workareas: list[tuple[int, int, int, int]],
+    position: tuple[int, int],
+) -> int:
+    valid_areas = [area for area in workareas if area[2] > 0 and area[3] > 0]
+    target = next(
+        (
+            area for area in valid_areas
+            if area[0] <= position[0] < area[0] + area[2]
+            and area[1] <= position[1] < area[1] + area[3]
+        ),
+        max(valid_areas, key=lambda area: area[2] * area[3]) if valid_areas else None,
+    )
+    if target is None:
+        return max(MIN_WIDGET_SIZE, round(size))
+    maximum = min(
+        target[2],
+        math.floor(target[3] * WIDGET_SIZE / expanded_base_height(view_mode)),
+    )
+    return max(MIN_WIDGET_SIZE, min(maximum, round(size)))
 
 
 def expanded_base_height(view_mode: str) -> int:
@@ -232,11 +251,7 @@ def widget_height(width: float, view_mode: str = "usage") -> int:
 
 
 def outward_resize_delta(delta_x: float, delta_y: float) -> float:
-    circle_center = (WIDGET_SIZE / 2, CONTENT_OFFSET_Y + WIDGET_SIZE / 2)
-    outward_x = RESIZE_CONTROL[0] - circle_center[0]
-    outward_y = RESIZE_CONTROL[1] - circle_center[1]
-    distance = math.hypot(outward_x, outward_y)
-    return (delta_x * outward_x + delta_y * outward_y) / distance
+    return (delta_x - delta_y) * 0.5
 
 
 def control_region(

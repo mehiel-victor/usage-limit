@@ -57,8 +57,7 @@ from usage_limit_view import (
 )
 from widget_support import (
     approval_task_transitions, format_lockscreen_status, log_debug,
-    notify_lockscreen, publish_approval_notifications, task_visual_signature,
-    unread_task_transitions,
+    notify_lockscreen, publish_approval_notifications, task_visual_signature, unread_task_transitions,
 )
 
 PROVIDER_ERRORS = (OSError, ValueError, TimeoutError, json.JSONDecodeError, RuntimeError, subprocess.SubprocessError)
@@ -430,7 +429,7 @@ class UsageLimitWidget(CollapsedWindowState, Gtk.Window if Gtk is not None else 
             delta_x = event.x_root - self._press_origin[0]
             delta_y = event.y_root - self._press_origin[1]
             delta = outward_resize_delta(delta_x, delta_y)
-            new_size = clamp_widget_size(self._resize_start_size + delta)
+            new_size = clamp_widget_size(self._resize_start_size + delta, self._view_mode, self._monitor_workareas(), self.get_position())
             self._did_drag = self._did_drag or new_size != self._resize_start_size
             if new_size != self._widget_size:
                 self._widget_size = new_size
@@ -555,7 +554,7 @@ class UsageLimitWidget(CollapsedWindowState, Gtk.Window if Gtk is not None else 
         elif target == "passthrough":
             tooltip.set_text("Desativar modo intangível" if self._click_through else "Ativar modo intangível")
         elif target == "resize":
-            tooltip.set_text("Arraste para redimensionar")
+            tooltip.set_text("Arraste para redimensionar até o limite da tela")
         elif target == "collapse":
             tooltip.set_text("Recolher na borda direita")
         else:
@@ -567,6 +566,7 @@ class UsageLimitWidget(CollapsedWindowState, Gtk.Window if Gtk is not None else 
             return
         self._view_mode = mode
         self._selected_task = 0
+        self._widget_size = clamp_widget_size(self._widget_size, self._view_mode, self._monitor_workareas(), self.get_position())
         self.resize(self._widget_size, widget_height(self._widget_size, self._view_mode))
         if mode != "usage":
             self.refresh_tasks()
@@ -788,12 +788,12 @@ class UsageLimitWidget(CollapsedWindowState, Gtk.Window if Gtk is not None else 
         position_file = POSITION_FILE if POSITION_FILE.is_file() else LEGACY_POSITION_FILE
         try:
             position = json.loads(position_file.read_text(encoding="utf-8"))
-            self._widget_size = clamp_widget_size(position.get("size", WIDGET_SIZE))
+            saved_mode = position.get("view_mode", "usage")
+            self._view_mode = saved_mode if saved_mode in {"usage", "overview", "attention"} else "usage"
+            self._widget_size = clamp_widget_size(position.get("size", WIDGET_SIZE), self._view_mode, self._monitor_workareas(), (int(position["x"]), int(position["y"])))
             self._pinned = bool(position.get("pinned", True))
             self._click_through = bool(position.get("click_through", False))
             self._collapsed = bool(position.get("collapsed", False))
-            saved_mode = position.get("view_mode", "usage")
-            self._view_mode = saved_mode if saved_mode in {"usage", "overview", "attention"} else "usage"
             if isinstance(position.get("expanded_x"), int) and isinstance(position.get("expanded_y"), int):
                 self._expanded_position = (position["expanded_x"], position["expanded_y"])
             self._apply_window_layer()
