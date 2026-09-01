@@ -41,9 +41,9 @@ class CollapsedWindowState:
         self._collapsed = False
         self.set_skip_taskbar_hint(False)
         self.set_resizable(True)
-        self.set_size_request(MIN_WIDGET_SIZE, widget_height(MIN_WIDGET_SIZE))
-        self.area.set_size_request(MIN_WIDGET_SIZE, widget_height(MIN_WIDGET_SIZE))
-        self.resize(self._widget_size, widget_height(self._widget_size))
+        self.set_size_request(MIN_WIDGET_SIZE, widget_height(MIN_WIDGET_SIZE, self._view_mode))
+        self.area.set_size_request(MIN_WIDGET_SIZE, widget_height(MIN_WIDGET_SIZE, self._view_mode))
+        self.resize(self._widget_size, widget_height(self._widget_size, self._view_mode))
         if self._expanded_position is not None:
             self.move(*self._expanded_position)
         self.area.get_accessible().set_name("Limites de uso e status de tarefas")
@@ -94,6 +94,6 @@ class CollapsedWindowState:
             expanded_x,
             target_y,
             self._widget_size,
-            widget_height(self._widget_size),
+            widget_height(self._widget_size, self._view_mode),
             self._monitor_workareas(),
         )

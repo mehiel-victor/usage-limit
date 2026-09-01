@@ -24,15 +24,16 @@ except (ImportError, ValueError):
 
 MONTHS_PT_BR = ("jan.", "fev.", "mar.", "abr.", "mai.", "jun.", "jul.", "ago.", "set.", "out.", "nov.", "dez.")
 WIDGET_SIZE = 240
-WIDGET_HEIGHT = 380
-CONTENT_OFFSET_Y = 68
+WIDGET_HEIGHT = 360
+USAGE_WIDGET_HEIGHT = 328
+CONTENT_OFFSET_Y = 56
 MIN_WIDGET_SIZE = 180
 MAX_WIDGET_SIZE = 360
-PROVIDER_TOGGLE = (120, 347)
-PASSTHROUGH_CONTROL = (80, 15)
-PIN_CONTROL = (120, 15)
-RESIZE_CONTROL = (160, 15)
-COLLAPSE_CONTROL = (200, 15)
+PROVIDER_TOGGLE = (120, 311)
+PASSTHROUGH_CONTROL = (78, 13)
+PIN_CONTROL = (106, 13)
+RESIZE_CONTROL = (134, 13)
+COLLAPSE_CONTROL = (162, 13)
 CONTROL_RADIUS = 13
 
 
@@ -222,8 +223,12 @@ def clamp_widget_size(size: float) -> int:
     return max(MIN_WIDGET_SIZE, min(MAX_WIDGET_SIZE, round(size)))
 
 
-def widget_height(width: float) -> int:
-    return round(width * WIDGET_HEIGHT / WIDGET_SIZE)
+def expanded_base_height(view_mode: str) -> int:
+    return USAGE_WIDGET_HEIGHT if view_mode == "usage" else WIDGET_HEIGHT
+
+
+def widget_height(width: float, view_mode: str = "usage") -> int:
+    return round(width * expanded_base_height(view_mode) / WIDGET_SIZE)
 
 
 def outward_resize_delta(delta_x: float, delta_y: float) -> float:
@@ -241,7 +246,7 @@ def control_region(
     half_width: int = CONTROL_RADIUS + 2,
     half_height: Optional[int] = None,
 ) -> cairo.RectangleInt:
-    scale = min(width / WIDGET_SIZE, height / WIDGET_HEIGHT)
+    scale = width / WIDGET_SIZE
     scaled_height = (half_height if half_height is not None else half_width) * scale
     scaled_width = half_width * scale
     center_x, center_y = center[0] * scale, center[1] * scale

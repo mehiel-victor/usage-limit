@@ -25,12 +25,12 @@ from task_sources import ATTENTION_STATUSES, MonitoredTask
 from usage_limit_view import adaptive_text_color, theme_colors
 
 BASE_WIDTH = 240
-BASE_HEIGHT = 380
-MODE_TOGGLE_RECT = (49, 34, 142, 27)
-RING_CENTER = (120, 188)
+BASE_HEIGHT = 360
+MODE_TOGGLE_RECT = (49, 28, 142, 26)
+RING_CENTER = (120, 176)
 RING_RADIUS = 106
 RING_WIDTH = 20
-ATTENTION_BUTTON_CENTER = (194, 102)
+ATTENTION_BUTTON_CENTER = (194, 90)
 
 STATUS_COLORS = {
     "running": "#1473E6",
@@ -198,14 +198,14 @@ def _draw_center(
         main = f"{len(all_tasks)} tarefas"
         detail = f"{attention} precisam de você"
     detail_color = "#D7DEE8" if dark_mode else "#374151"
-    _text(context, main, 120, 180, "Sans Bold 15", palette.primary, palette.background, 174)
-    _text(context, detail, 120, 202, "Sans Medium 8.5", detail_color, palette.background, 160)
+    _text(context, main, 120, 168, "Sans Bold 15", palette.primary, palette.background, 174)
+    _text(context, detail, 120, 190, "Sans Medium 8.5", detail_color, palette.background, 160)
     if any(task.status == "running" for task in all_tasks):
         context.new_path()
         _set_color(context, "#2F80ED")
         context.set_line_width(2.2)
         context.set_line_cap(cairo.LINE_CAP_ROUND)
-        context.arc(120, 188, 57, math.pi * 0.15, math.pi * 0.78)
+        context.arc(120, 176, 57, math.pi * 0.15, math.pi * 0.78)
         context.stroke()
 
 
@@ -255,7 +255,7 @@ def _draw_legend(context: Any, tasks: list[MonitoredTask], dark_mode: bool) -> N
         context,
         f"{len(tasks)} tarefas monitoradas",
         120,
-        310,
+        302,
         "Sans Bold 7",
         TRANSPARENT_TEXT,
         width=180,
@@ -276,7 +276,7 @@ def _draw_legend(context: Any, tasks: list[MonitoredTask], dark_mode: bool) -> N
         rows = [visible[:2], visible[2:]]
     else:
         rows = [visible[:3], visible[3:]]
-    row_positions = (342,) if len(rows) == 1 else (330, 354)
+    row_positions = (328,) if len(rows) == 1 else (316, 344)
     for row, center_y in zip(rows, row_positions):
         slot_width = 220 / len(row)
         for index, (status, label) in enumerate(row):
@@ -313,13 +313,13 @@ def draw_task_status(
     palette = theme_colors(dark_mode)
     context.new_path()
     _set_color(context, palette.background)
-    context.arc(120, 188, 112, 0, math.tau)
+    context.arc(120, 176, 112, 0, math.tau)
     context.fill()
     draw_mode_toggle(context, mode, hovered, dark_mode)
     if error:
         palette = theme_colors(dark_mode)
-        _text(context, "Sem acesso às tarefas", 120, 180, "Sans Bold 12", palette.primary, palette.background, 180)
-        _text(context, "Clique para atualizar", 120, 202, "Sans 8", palette.secondary, palette.background)
+        _text(context, "Sem acesso às tarefas", 120, 168, "Sans Bold 12", palette.primary, palette.background, 180)
+        _text(context, "Clique para atualizar", 120, 190, "Sans 8", palette.secondary, palette.background)
     else:
         _draw_ring(context, shown, selected, dark_mode)
         _draw_center(context, tasks, shown, mode, dark_mode)

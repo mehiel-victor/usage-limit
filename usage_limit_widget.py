@@ -41,7 +41,6 @@ from usage_limit_view import (
     PIN_CONTROL,
     PROVIDER_TOGGLE,
     RESIZE_CONTROL,
-    WIDGET_HEIGHT,
     WIDGET_SIZE,
     draw_widget,
     _draw_utility_controls,
@@ -49,6 +48,7 @@ from usage_limit_view import (
     clamp_window_position,
     control_at,
     control_region,
+    expanded_base_height,
     next_monitor_position,
     outward_resize_delta,
     system_prefers_dark,
@@ -132,8 +132,8 @@ class UsageLimitWidget(CollapsedWindowState, Gtk.Window if Gtk is not None else 
 
         self.set_title("Usage Limit")
         self.set_icon_name("usage-limit")
-        self.set_default_size(WIDGET_SIZE, WIDGET_HEIGHT)
-        self.set_size_request(MIN_WIDGET_SIZE, widget_height(MIN_WIDGET_SIZE))
+        self.set_default_size(WIDGET_SIZE, widget_height(WIDGET_SIZE, self._view_mode))
+        self.set_size_request(MIN_WIDGET_SIZE, widget_height(MIN_WIDGET_SIZE, self._view_mode))
         self.set_resizable(True)
         self.set_decorated(False)
         self.set_keep_above(self._pinned)
@@ -147,7 +147,7 @@ class UsageLimitWidget(CollapsedWindowState, Gtk.Window if Gtk is not None else 
         self._configure_system_theme()
 
         self.area = Gtk.DrawingArea()
-        self.area.set_size_request(MIN_WIDGET_SIZE, widget_height(MIN_WIDGET_SIZE))
+        self.area.set_size_request(MIN_WIDGET_SIZE, widget_height(MIN_WIDGET_SIZE, self._view_mode))
         self.area.set_has_tooltip(True)
         self.area.set_can_focus(True)
         self.area.get_accessible().set_name("Limites de uso e status de tarefas")
@@ -200,7 +200,7 @@ class UsageLimitWidget(CollapsedWindowState, Gtk.Window if Gtk is not None else 
             draw_collapsed_widget(context, self._all_limits, hovered_provider, self._dark_mode)
             context.restore()
             return False
-        scale = min(allocation.width / WIDGET_SIZE, allocation.height / WIDGET_HEIGHT)
+        scale = min(allocation.width / WIDGET_SIZE, allocation.height / expanded_base_height(self._view_mode))
         context.save()
         context.scale(scale, scale)
         if self._view_mode == "usage":
@@ -257,7 +257,7 @@ class UsageLimitWidget(CollapsedWindowState, Gtk.Window if Gtk is not None else 
     def _base_point(self, x: float, y: float) -> tuple[float, float]:
         allocation = self.area.get_allocation()
         base_width = COLLAPSED_WIDTH if self._collapsed else WIDGET_SIZE
-        base_height = COLLAPSED_HEIGHT if self._collapsed else WIDGET_HEIGHT
+        base_height = COLLAPSED_HEIGHT if self._collapsed else expanded_base_height(self._view_mode)
         scale = min(allocation.width / base_width, allocation.height / base_height)
         return x / scale, y / scale
 
@@ -434,7 +434,7 @@ class UsageLimitWidget(CollapsedWindowState, Gtk.Window if Gtk is not None else 
             self._did_drag = self._did_drag or new_size != self._resize_start_size
             if new_size != self._widget_size:
                 self._widget_size = new_size
-                self.resize(new_size, widget_height(new_size))
+                self.resize(new_size, widget_height(new_size, self._view_mode))
             return True
         if self._press_origin and self._press_target is None and not self._did_drag:
             moved = abs(event.x_root - self._press_origin[0]) > 5 or abs(event.y_root - self._press_origin[1]) > 5
@@ -567,6 +567,7 @@ class UsageLimitWidget(CollapsedWindowState, Gtk.Window if Gtk is not None else 
             return
         self._view_mode = mode
         self._selected_task = 0
+        self.resize(self._widget_size, widget_height(self._widget_size, self._view_mode))
         if mode != "usage":
             self.refresh_tasks()
         if self._click_through:
@@ -759,7 +760,7 @@ class UsageLimitWidget(CollapsedWindowState, Gtk.Window if Gtk is not None else 
             region.union(cairo.Region(control_region(center, allocation.width, allocation.height)))
         region.union(
             cairo.Region(
-                control_region((120, 48), allocation.width, allocation.height, 73, 15)
+                control_region((120, 41), allocation.width, allocation.height, 73, 14)
             )
         )
         if self._view_mode == "usage":
@@ -800,12 +801,12 @@ class UsageLimitWidget(CollapsedWindowState, Gtk.Window if Gtk is not None else 
                 self._apply_collapsed_geometry((int(position["x"]), int(position["y"])))
                 self._sync_collapse_menu_label()
                 return
-            self.resize(self._widget_size, widget_height(self._widget_size))
+            self.resize(self._widget_size, widget_height(self._widget_size, self._view_mode))
             safe_x, safe_y = clamp_window_position(
                 int(position["x"]),
                 int(position["y"]),
                 self._widget_size,
-                widget_height(self._widget_size),
+                widget_height(self._widget_size, self._view_mode),
                 self._monitor_workareas(),
             )
             self.move(safe_x, safe_y)
