@@ -714,8 +714,7 @@ class UsageLimitWidget(CollapsedWindowState, Gtk.Window if Gtk is not None else 
         return False
 
     def _on_size_allocate(self, _widget: Any, _allocation: Any) -> None:
-        if self._click_through:
-            GLib.idle_add(self._apply_input_region)
+        GLib.idle_add(self._apply_input_region)
 
     def _on_window_state(self, _widget: Any, event: Any) -> bool:
         self._minimized = bool(event.new_window_state & Gdk.WindowState.ICONIFIED)
