@@ -29,8 +29,8 @@ def _load_mark(filename: str, size: int) -> Any:
 
 
 MODEL_MARKS = {
-    "openai": _load_mark("openai-symbol.svg", 224),
-    "antigravity": _load_mark("antigravity-icon.png", 224),
+    "openai": _load_mark("openai-symbol.svg", 190),
+    "antigravity": _load_mark("antigravity-icon.png", 190),
 }
 
 
