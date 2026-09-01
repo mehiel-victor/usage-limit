@@ -56,8 +56,9 @@ from usage_limit_view import (
     widget_height,
 )
 from widget_support import (
-    format_lockscreen_status, log_debug,
-    notify_lockscreen, unread_task_transitions,
+    approval_task_transitions, format_lockscreen_status, log_debug,
+    notify_lockscreen, publish_approval_notifications, task_visual_signature,
+    unread_task_transitions,
 )
 
 PROVIDER_ERRORS = (OSError, ValueError, TimeoutError, json.JSONDecodeError, RuntimeError, subprocess.SubprocessError)
@@ -125,6 +126,7 @@ class UsageLimitWidget(CollapsedWindowState, Gtk.Window if Gtk is not None else 
         self._attention_window: Optional[Any] = None
         self._lockscreen_enabled = self._load_lockscreen_preference()
         self._known_task_statuses: dict[str, str] = {}
+        self._known_approval_task_ids: set[str] = set()
         self._task_statuses_initialized = False
         self._lockscreen_notification_id = 0
 
@@ -405,6 +407,7 @@ class UsageLimitWidget(CollapsedWindowState, Gtk.Window if Gtk is not None else 
         self._task_source = CodexTaskSource(self._profiles[self._profile_index]["home"])
         self._task_refreshing = False
         self._known_task_statuses = {}
+        self._known_approval_task_ids = set()
         self._task_statuses_initialized = False
         self._all_limits = []
         self._limits = []
@@ -924,17 +927,23 @@ class UsageLimitWidget(CollapsedWindowState, Gtk.Window if Gtk is not None else 
         if source is not self._task_source:
             return False
         self._task_refreshing = False
-        previous_signature = self._task_visual_signature(self._tasks)
+        previous_signature = task_visual_signature(self._tasks)
         changed = error != self._task_error
         self._task_error = error
         if not error:
             unread_tasks = unread_task_transitions(self._known_task_statuses, tasks)
+            approval_tasks, approval_task_ids = approval_task_transitions(
+                self._known_approval_task_ids,
+                tasks,
+            )
             self._known_task_statuses.update({task.id: task.status for task in tasks})
+            self._known_approval_task_ids = approval_task_ids
             self._tasks = tasks
+            publish_approval_notifications(approval_tasks)
             if self._task_statuses_initialized:
                 self._publish_lockscreen(unread_tasks)
             self._task_statuses_initialized = True
-            changed = changed or previous_signature != self._task_visual_signature(tasks)
+            changed = changed or previous_signature != task_visual_signature(tasks)
             shown = visible_tasks(tasks, self._view_mode)
             self._selected_task = min(self._selected_task, max(0, len(shown) - 1))
         else:
@@ -945,15 +954,6 @@ class UsageLimitWidget(CollapsedWindowState, Gtk.Window if Gtk is not None else 
         if self._attention_window is not None and changed:
             self._attention_window.update_tasks(self._tasks, self._dark_mode)
         return False
-
-    @staticmethod
-    def _task_visual_signature(
-        tasks: list[MonitoredTask],
-    ) -> tuple[tuple[str, str, str, str], ...]:
-        return tuple(
-            (task.id, task.title, task.status, task.current_activity)
-            for task in tasks
-        )
 
     def _scheduled_task_refresh(self) -> bool:
         self.refresh_tasks()

@@ -36,6 +36,9 @@ keys and press Enter, to open the corresponding task in Codex Desktop. Click
 the attention indicator, or press `A`, to open a rounded square queue with
 running, queued, waiting, blocked, and failed tasks. Completed tasks stay out
 of the queue. Each color-coded row opens its task directly in Codex Desktop.
+When a task reaches a native approval breakpoint, the app sends one desktop
+notification. Periodic refreshes do not repeat it; leaving and later re-entering
+an approval breakpoint produces a new notification.
 
 The interface material adapts the optical language of
 [Liquid Glass for GNOME Shell](https://github.com/ryohsuke1231/liquid-glass):

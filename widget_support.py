@@ -7,9 +7,10 @@ import os
 import shutil
 import subprocess
 from datetime import datetime
+from typing import Optional
 
 from task_sources import MonitoredTask
-from usage_sources import UsageLimit
+from usage_sources import UsageLimit, notify
 
 UNREAD_TRIGGER_STATUSES = frozenset({"waiting_for_user", "blocked", "failed", "completed"})
 
@@ -67,6 +68,39 @@ def unread_task_transitions(
         if task.status in UNREAD_TRIGGER_STATUSES
         and previous_statuses.get(task.id) != task.status
     ]
+
+
+def approval_task_transitions(
+    previous_task_ids: set[str],
+    tasks: list[MonitoredTask],
+) -> tuple[list[MonitoredTask], set[str]]:
+    """Return newly pending approvals and the current approval task ids."""
+    current_task_ids = {
+        task.id for task in tasks if task.attention_kind == "approval"
+    }
+    transitions = [
+        task
+        for task in tasks
+        if task.id in current_task_ids and task.id not in previous_task_ids
+    ]
+    return transitions, current_task_ids
+
+
+def publish_approval_notifications(tasks: list[MonitoredTask]) -> None:
+    for task in tasks:
+        notify(
+            "Aprovação necessária no Codex",
+            f"{task.title}\nAbra o Codex para revisar e aprovar.",
+        )
+
+
+def task_visual_signature(
+    tasks: list[MonitoredTask],
+) -> tuple[tuple[str, str, str, str, Optional[str]], ...]:
+    return tuple(
+        (task.id, task.title, task.status, task.current_activity, task.attention_kind)
+        for task in tasks
+    )
 
 
 def log_debug(message: str) -> None:

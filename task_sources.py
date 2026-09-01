@@ -36,6 +36,7 @@ class MonitoredTask:
     current_activity: str
     updated_at: int
     cwd: str = ""
+    attention_kind: Optional[str] = None
 
     @property
     def needs_attention(self) -> bool:
@@ -130,20 +131,20 @@ def _apply_lifecycle(
     return next_status, next_activity
 
 
-def _native_status(thread: dict[str, Any]) -> Optional[tuple[str, str]]:
+def _native_status(thread: dict[str, Any]) -> Optional[tuple[str, str, Optional[str]]]:
     raw_status = thread.get("status")
     if not isinstance(raw_status, dict):
         return None
     status_type = raw_status.get("type")
     flags = raw_status.get("activeFlags", [])
     if status_type == "systemError":
-        return "failed", "Falha no processo do Codex"
-    if status_type == "active" and any(
-        flag in {"waitingOnApproval", "waitingOnUserInput"} for flag in flags
-    ):
-        return "waiting_for_user", "Aguardando sua ação"
+        return "failed", "Falha no processo do Codex", None
+    if status_type == "active" and "waitingOnApproval" in flags:
+        return "waiting_for_user", "Aguardando sua aprovação", "approval"
+    if status_type == "active" and "waitingOnUserInput" in flags:
+        return "waiting_for_user", "Aguardando sua resposta", "user_input"
     if status_type == "active":
-        return "running", "Executando tarefa"
+        return "running", "Executando tarefa", None
     return None
 
 
@@ -183,6 +184,7 @@ def _normalize_thread(thread: dict[str, Any], cache: RolloutCache) -> MonitoredT
         current_activity=activity,
         updated_at=updated_at,
         cwd=str(thread.get("cwd") or ""),
+        attention_kind=native[2] if native else None,
     )
 
 
