@@ -8,6 +8,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Optional
 
+from model_branding import model_mark
+
 try:
     import cairo
 except ImportError:
@@ -16,11 +18,12 @@ except ImportError:
 try:
     import gi
 
+    gi.require_version("Gdk", "3.0")
     gi.require_version("Pango", "1.0")
     gi.require_version("PangoCairo", "1.0")
-    from gi.repository import Pango, PangoCairo
+    from gi.repository import Gdk, Pango, PangoCairo
 except (ImportError, ValueError):
-    Pango = PangoCairo = None  # type: ignore[assignment]
+    Gdk = Pango = PangoCairo = None  # type: ignore[assignment]
 
 MONTHS_PT_BR = ("jan.", "fev.", "mar.", "abr.", "mai.", "jun.", "jul.", "ago.", "set.", "out.", "nov.", "dez.")
 WIDGET_SIZE = 240
@@ -202,6 +205,31 @@ def _draw_usage_ring(context: Any, remaining_percent: int, colors: ThemeColors, 
     _set_color(context, "#FF5F65" if critical else usage_color(remaining_percent))
     context.arc(center, center, radius, -math.pi / 2, -math.pi / 2 + math.tau * fraction)
     context.stroke()
+
+
+def _draw_model_watermark(context: Any, limit: Any, color: str) -> None:
+    if limit is None:
+        return
+    mark = model_mark(limit.name, limit.provider)
+    if mark is None:
+        return
+    context.save()
+    context.new_path()
+    context.arc(WIDGET_SIZE / 2, WIDGET_SIZE / 2, 112, 0, math.tau)
+    context.clip()
+    context.save()
+    context.translate(8, 8)
+    Gdk.cairo_set_source_pixbuf(context, mark, 0, 0)
+    mark_pattern = context.get_source()
+    context.set_source_rgba(
+        int(color[1:3], 16) / 255,
+        int(color[3:5], 16) / 255,
+        int(color[5:7], 16) / 255,
+        0.3,
+    )
+    context.mask(mark_pattern)
+    context.restore()
+    context.restore()
 
 
 def control_at(x: float, y: float) -> Optional[str]:
@@ -470,6 +498,7 @@ def draw_widget(
     _set_color(context, panel_background)
     context.arc(120, 120, 112, 0, math.tau)
     context.fill()
+    _draw_model_watermark(context, selected_limit, colors.track)
 
     if error or not limits:
         _draw_text(context, "—", 107, "Sans Bold 34", colors.primary, background_color=panel_background)
