@@ -218,7 +218,7 @@ def _draw_model_watermark(context: Any, limit: Any, color: str) -> None:
     context.arc(WIDGET_SIZE / 2, WIDGET_SIZE / 2, 112, 0, math.tau)
     context.clip()
     context.save()
-    context.translate(25, 25)
+    context.translate(45, 45)
     Gdk.cairo_set_source_pixbuf(context, mark, 0, 0)
     mark_pattern = context.get_source()
     context.set_source_rgba(
