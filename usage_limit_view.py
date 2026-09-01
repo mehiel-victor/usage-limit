@@ -32,6 +32,7 @@ PROVIDER_TOGGLE = (120, 347)
 PASSTHROUGH_CONTROL = (80, 15)
 PIN_CONTROL = (120, 15)
 RESIZE_CONTROL = (160, 15)
+COLLAPSE_CONTROL = (200, 15)
 CONTROL_RADIUS = 13
 
 
@@ -206,7 +207,12 @@ def _draw_usage_ring(context: Any, remaining_percent: int, colors: ThemeColors, 
 def control_at(x: float, y: float) -> Optional[str]:
     if abs(x - PROVIDER_TOGGLE[0]) <= 24 and abs(y - PROVIDER_TOGGLE[1]) <= 11:
         return "provider"
-    for name, center in (("passthrough", PASSTHROUGH_CONTROL), ("pin", PIN_CONTROL), ("resize", RESIZE_CONTROL)):
+    for name, center in (
+        ("passthrough", PASSTHROUGH_CONTROL),
+        ("pin", PIN_CONTROL),
+        ("resize", RESIZE_CONTROL),
+        ("collapse", COLLAPSE_CONTROL),
+    ):
         if math.hypot(x - center[0], y - center[1]) <= CONTROL_RADIUS:
             return name
     return None
@@ -352,7 +358,7 @@ def _draw_icon_control(
         context.line_to(x + 2.7, y - 4.5)
         context.move_to(x, y + 3)
         context.line_to(x, y + 7)
-    else:
+    elif name == "resize":
         context.move_to(x - 5, y + 5)
         context.line_to(x + 5, y - 5)
         context.move_to(x + 1, y - 5)
@@ -361,6 +367,10 @@ def _draw_icon_control(
         context.move_to(x - 1, y + 5)
         context.line_to(x - 5, y + 5)
         context.line_to(x - 5, y + 1)
+    else:
+        context.move_to(x - 5, y - 2)
+        context.line_to(x, y + 3)
+        context.line_to(x + 5, y - 2)
     context.stroke()
 
 
@@ -374,6 +384,7 @@ def _draw_utility_controls(
     _draw_icon_control(context, "passthrough", PASSTHROUGH_CONTROL, click_through, hovered == "passthrough", colors)
     _draw_icon_control(context, "pin", PIN_CONTROL, pinned, hovered == "pin", colors)
     _draw_icon_control(context, "resize", RESIZE_CONTROL, False, hovered == "resize", colors)
+    _draw_icon_control(context, "collapse", COLLAPSE_CONTROL, False, hovered == "collapse", colors)
 
 
 def _draw_controls(
@@ -408,3 +419,70 @@ def _draw_controls(
             center_x=left + 11,
         )
     _draw_utility_controls(context, pinned, click_through, hovered, colors)
+
+
+def draw_widget(
+    context: Any,
+    limits: list[Any],
+    selected: int,
+    error: bool = False,
+    pinned: bool = True,
+    hovered_control: Optional[str] = None,
+    click_through: bool = False,
+    dark_mode: bool = True,
+    active_provider: Optional[str] = None,
+    available_providers: Optional[set[str]] = None,
+    critical_pulse: bool = False,
+) -> None:
+    """Render the complete circular widget on a Cairo context."""
+    colors = critical_colors(theme_colors(dark_mode)) if limits and critical_pulse else theme_colors(dark_mode)
+    context.set_antialias(cairo.ANTIALIAS_BEST)
+    context.set_operator(cairo.OPERATOR_CLEAR)
+    context.paint()
+    context.set_operator(cairo.OPERATOR_OVER)
+    context.save()
+    context.translate(0, CONTENT_OFFSET_Y)
+
+    selected_limit = limits[selected] if limits and not error else None
+    is_alternate = selected_limit is not None and selected_limit.window != "session"
+    panel_background = colors.alternate_background if is_alternate else colors.background
+    context.new_path()
+    _set_color(context, panel_background)
+    context.arc(120, 120, 112, 0, math.tau)
+    context.fill()
+
+    if error or not limits:
+        _draw_text(context, "—", 107, "Sans Bold 34", colors.primary, background_color=panel_background)
+        _draw_text(context, "Não foi possível atualizar", 139, "Sans 9", colors.secondary, background_color=panel_background)
+        _draw_text(context, "Clique para tentar novamente", 163, "Sans 8", colors.tertiary, background_color=panel_background)
+        context.restore()
+        _draw_controls(context, pinned, click_through, hovered_control, colors, active_provider, available_providers or set())
+        return
+
+    limit = limits[selected]
+    window_label = {"session": "sessão", "weekly": "semanal", "5h": "5 horas"}.get(limit.window, limit.window)
+    _draw_usage_ring(context, limit.remaining_percent, colors, bool(critical_pulse))
+    label_color = colors.alternate_label if is_alternate else colors.label
+    _draw_text(context, limit.provider, 61, "Sans Bold 8", label_color, background_color=panel_background, max_width=190)
+    _draw_text(
+        context,
+        f"{limit.name} · {window_label}",
+        73,
+        "Sans 7",
+        label_color,
+        background_color=panel_background,
+        max_width=200,
+    )
+    _draw_text(context, f"{limit.remaining_percent}%", 111, "Sans Bold 26", colors.primary, background_color=panel_background)
+    _draw_text(context, "restante", 137, "Sans 8", colors.secondary, background_color=panel_background)
+    _draw_text(context, format_reset_date(limit.resets_at), 163, "Sans 7", colors.tertiary, background_color=panel_background)
+
+    dot_gap = 10
+    start_x = 120 - (len(limits) - 1) * dot_gap / 2
+    for index in range(len(limits)):
+        _set_color(context, colors.dot_active if index == selected else colors.dot_inactive)
+        context.arc(start_x + index * dot_gap, 185, 2.2 if index == selected else 1.8, 0, math.tau)
+        context.fill()
+
+    context.restore()
+    _draw_controls(context, pinned, click_through, hovered_control, colors, active_provider, available_providers or set())

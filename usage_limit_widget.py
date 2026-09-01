@@ -5,9 +5,7 @@ from __future__ import annotations
 
 import fcntl
 import json
-import math
 import os
-import shutil
 import subprocess
 import threading
 import time
@@ -15,6 +13,15 @@ from pathlib import Path
 from typing import Any, Optional
 
 from attention_queue_window import AttentionQueueWindow
+from collapsed_usage_view import (
+    COLLAPSED_HEIGHT,
+    COLLAPSED_WIDTH,
+    draw_collapsed_widget,
+    provider_at,
+    provider_remaining,
+    right_edge_position,
+)
+from collapsed_window_state import CollapsedWindowState
 from usage_sources import UsageLimit, configured_profiles, notify, read_antigravity_limits, read_codex_limits
 from task_sources import CodexTaskSource, MonitoredTask, open_codex_task
 from task_status_view import (
@@ -28,7 +35,7 @@ from task_status_view import (
     visible_tasks,
 )
 from usage_limit_view import (
-    CONTENT_OFFSET_Y,
+    COLLAPSE_CONTROL,
     MIN_WIDGET_SIZE,
     PASSTHROUGH_CONTROL,
     PIN_CONTROL,
@@ -36,22 +43,21 @@ from usage_limit_view import (
     RESIZE_CONTROL,
     WIDGET_HEIGHT,
     WIDGET_SIZE,
-    _draw_controls,
-    _draw_usage_ring,
-    _draw_text,
+    draw_widget,
     _draw_utility_controls,
-    _set_color,
     clamp_widget_size,
     clamp_window_position,
     control_at,
     control_region,
-    critical_colors,
-    format_reset_date,
     next_monitor_position,
     outward_resize_delta,
     system_prefers_dark,
     theme_colors,
     widget_height,
+)
+from widget_support import (
+    format_lockscreen_status, log_debug,
+    notify_lockscreen, unread_task_transitions,
 )
 
 PROVIDER_ERRORS = (OSError, ValueError, TimeoutError, json.JSONDecodeError, RuntimeError, subprocess.SubprocessError)
@@ -77,148 +83,9 @@ RUNTIME_ROOT = os.environ.get("XDG_RUNTIME_DIR") or os.environ.get("XDG_CACHE_HO
 LOCK_FILE = Path(RUNTIME_ROOT) / "usage-limit" / "widget.lock"
 REFRESH_MS = 5 * 60_000
 TASK_REFRESH_MS = 3_000
-UNREAD_TRIGGER_STATUSES = frozenset({"waiting_for_user", "blocked", "failed", "completed"})
 
 
-def notify_lockscreen(message: str, replace_id: int = 0) -> int:
-    """Publish a resident notification and return its server identifier."""
-    executable = shutil.which("notify-send")
-    if not executable:
-        return 0
-    command = [
-        executable,
-        "--print-id",
-        "--app-name=Usage Limit",
-        "--hint", "boolean:resident:true",
-        "--hint", "string:desktop-entry:io.github.mehiel.UsageLimit",
-        "--urgency=normal",
-    ]
-    if replace_id:
-        command.extend(("--replace-id", str(replace_id)))
-    result = subprocess.run(
-        [*command, "Chats não lidos", message],
-        check=False,
-        capture_output=True,
-        text=True,
-        timeout=3,
-    )
-    try:
-        return int(result.stdout.strip())
-    except ValueError:
-        return 0
-
-
-def format_lockscreen_status(limits: list[UsageLimit], tasks: list[MonitoredTask]) -> str:
-    """Build a concise notification containing limits and unread tasks."""
-    usage = " · ".join(
-        f"{limit.provider}: {limit.remaining_percent}%"
-        for limit in limits[:2]
-    ) or "Limites indisponíveis"
-    if not tasks:
-        return f"{usage}\nNenhum chat não lido"
-    lines = [
-        f"• {task.title} ({task.current_activity})"
-        for task in tasks[:5]
-    ]
-    if len(tasks) > 5:
-        lines.append(f"(+{len(tasks) - 5} outros)")
-    return f"{usage}\n" + "\n".join(lines)
-
-
-def unread_task_transitions(
-    previous_statuses: dict[str, str],
-    tasks: list[MonitoredTask],
-) -> list[MonitoredTask]:
-    """Return tasks that just entered a status requiring the user's attention."""
-    return [
-        task
-        for task in tasks
-        if task.status in UNREAD_TRIGGER_STATUSES
-        and previous_statuses.get(task.id) != task.status
-    ]
-
-def log_debug(message: str) -> None:
-    if os.environ.get("USAGE_LIMIT_DEBUG") != "1":
-        return
-    try:
-        with open("/tmp/usage_limit_debug.log", "a", encoding="utf-8") as stream:
-            from datetime import datetime
-            stream.write(f"{datetime.now().isoformat()} - {message}\n")
-    except Exception:
-        pass
-
-
-def draw_widget(
-    context: Any,
-    limits: list[UsageLimit],
-    selected: int,
-    error: bool = False,
-    pinned: bool = True,
-    hovered_control: Optional[str] = None,
-    click_through: bool = False,
-    dark_mode: bool = True,
-    active_provider: Optional[str] = None,
-    available_providers: Optional[set[str]] = None,
-    critical_pulse: bool = False,
-) -> None:
-    """Render the complete circular widget on a Cairo context."""
-    colors = theme_colors(dark_mode)
-    critical = bool(limits) and critical_pulse
-    if critical:
-        colors = critical_colors(colors)
-    context.set_antialias(cairo.ANTIALIAS_BEST)
-    context.set_operator(cairo.OPERATOR_CLEAR)
-    context.paint()
-    context.set_operator(cairo.OPERATOR_OVER)
-    context.save()
-    context.translate(0, CONTENT_OFFSET_Y)
-
-    selected_limit = limits[selected] if limits and not error else None
-    is_alternate = selected_limit is not None and selected_limit.window != "session"
-    panel_background = colors.alternate_background if is_alternate else colors.background
-    context.new_path()
-    _set_color(context, panel_background)
-    context.arc(120, 120, 112, 0, math.tau)
-    context.fill()
-
-    if error or not limits:
-        _draw_text(context, "—", 107, "Sans Bold 34", colors.primary, background_color=panel_background)
-        _draw_text(context, "Não foi possível atualizar", 139, "Sans 9", colors.secondary, background_color=panel_background)
-        _draw_text(context, "Clique para tentar novamente", 163, "Sans 8", colors.tertiary, background_color=panel_background)
-        context.restore()
-        _draw_controls(context, pinned, click_through, hovered_control, colors, active_provider, available_providers or set())
-        return
-
-    limit = limits[selected]
-    window_label = {"session": "sessão", "weekly": "semanal", "5h": "5 horas"}.get(limit.window, limit.window)
-    _draw_usage_ring(context, limit.remaining_percent, colors, critical)
-    label_color = colors.alternate_label if is_alternate else colors.label
-    _draw_text(context, limit.provider, 61, "Sans Bold 8", label_color, background_color=panel_background, max_width=190)
-    _draw_text(
-        context,
-        f"{limit.name} · {window_label}",
-        73,
-        "Sans 7",
-        label_color,
-        background_color=panel_background,
-        max_width=200,
-    )
-    _draw_text(context, f"{limit.remaining_percent}%", 111, "Sans Bold 26", colors.primary, background_color=panel_background)
-    _draw_text(context, "restante", 137, "Sans 8", colors.secondary, background_color=panel_background)
-    _draw_text(context, format_reset_date(limit.resets_at), 163, "Sans 7", colors.tertiary, background_color=panel_background)
-
-    dot_gap = 10
-    start_x = 120 - (len(limits) - 1) * dot_gap / 2
-    for index in range(len(limits)):
-        _set_color(context, colors.dot_active if index == selected else colors.dot_inactive)
-        context.arc(start_x + index * dot_gap, 185, 2.2 if index == selected else 1.8, 0, math.tau)
-        context.fill()
-
-    context.restore()
-    _draw_controls(context, pinned, click_through, hovered_control, colors, active_provider, available_providers or set())
-
-
-class UsageLimitWidget(Gtk.Window if Gtk is not None else object):
+class UsageLimitWidget(CollapsedWindowState, Gtk.Window if Gtk is not None else object):
     def __init__(self, application: Any = None):
         super().__init__(type=Gtk.WindowType.TOPLEVEL)
         if application is not None:
@@ -245,6 +112,8 @@ class UsageLimitWidget(Gtk.Window if Gtk is not None else object):
         self._visibility_check_pending = False
         self._widget_size = WIDGET_SIZE
         self._minimized = False
+        self._collapsed = False
+        self._expanded_position: Optional[tuple[int, int]] = None
         self._profiles = configured_profiles()
         self._profile_index = 0
         self._task_source = CodexTaskSource(self._profiles[0]["home"])
@@ -319,6 +188,16 @@ class UsageLimitWidget(Gtk.Window if Gtk is not None else object):
 
     def _on_draw(self, _area: Any, context: Any) -> bool:
         allocation = self.area.get_allocation()
+        if self._collapsed:
+            scale = min(allocation.width / COLLAPSED_WIDTH, allocation.height / COLLAPSED_HEIGHT)
+            context.save()
+            context.scale(scale, scale)
+            hovered_provider = None
+            if self._hovered_control and self._hovered_control.startswith("collapsed:"):
+                hovered_provider = self._hovered_control.split(":", 1)[1]
+            draw_collapsed_widget(context, self._all_limits, hovered_provider, self._dark_mode)
+            context.restore()
+            return False
         scale = min(allocation.width / WIDGET_SIZE, allocation.height / WIDGET_HEIGHT)
         context.save()
         context.scale(scale, scale)
@@ -361,7 +240,7 @@ class UsageLimitWidget(Gtk.Window if Gtk is not None else object):
         return any(limit.remaining_percent <= 20 for limit in self._all_limits)
 
     def _critical_blink(self) -> bool:
-        if self._view_mode != "usage":
+        if self._collapsed or self._view_mode != "usage":
             self._critical_phase = False
             return True
         if self._error or not self._has_critical_limit():
@@ -375,7 +254,9 @@ class UsageLimitWidget(Gtk.Window if Gtk is not None else object):
 
     def _base_point(self, x: float, y: float) -> tuple[float, float]:
         allocation = self.area.get_allocation()
-        scale = min(allocation.width / WIDGET_SIZE, allocation.height / WIDGET_HEIGHT)
+        base_width = COLLAPSED_WIDTH if self._collapsed else WIDGET_SIZE
+        base_height = COLLAPSED_HEIGHT if self._collapsed else WIDGET_HEIGHT
+        scale = min(allocation.width / base_width, allocation.height / base_height)
         return x / scale, y / scale
 
     def _configure_system_theme(self) -> None:
@@ -437,6 +318,11 @@ class UsageLimitWidget(Gtk.Window if Gtk is not None else object):
             return False
         self._press_origin = (event.x_root, event.y_root)
         base_x, base_y = self._base_point(event.x, event.y)
+        if self._collapsed:
+            provider = provider_at(base_x, base_y)
+            self._press_target = f"collapsed:{provider}" if provider else None
+            self._did_drag = False
+            return True
         selected_mode = mode_at(base_x, base_y)
         self._press_target = f"mode:{selected_mode}" if selected_mode else control_at(base_x, base_y)
         if self._view_mode != "usage" and self._press_target == "provider":
@@ -473,6 +359,9 @@ class UsageLimitWidget(Gtk.Window if Gtk is not None else object):
         move_monitor.set_sensitive(len(self._monitor_workareas()) > 1)
         move_monitor.connect("activate", lambda _item: self._move_to_next_monitor())
         menu.append(move_monitor)
+        self._collapse_menu_item = Gtk.MenuItem.new_with_label("Recolher na borda")
+        self._collapse_menu_item.connect("activate", lambda _item: self._toggle_collapsed())
+        menu.append(self._collapse_menu_item)
         menu.append(Gtk.SeparatorMenuItem())
         minimize = Gtk.MenuItem.new_with_label("Minimizar")
         minimize.connect("activate", lambda _item: self._minimize())
@@ -524,6 +413,16 @@ class UsageLimitWidget(Gtk.Window if Gtk is not None else object):
         self.refresh_tasks()
 
     def _on_motion(self, _area: Any, event: Any) -> bool:
+        if self._collapsed:
+            if self._press_origin is None:
+                base_x, base_y = self._base_point(event.x, event.y)
+                provider = provider_at(base_x, base_y)
+                hovered = f"collapsed:{provider}" if provider else None
+                if hovered != self._hovered_control:
+                    self._hovered_control = hovered
+                    self._update_cursor()
+                    self.area.queue_draw()
+            return True
         if self._press_origin and self._press_target == "resize":
             delta_x = event.x_root - self._press_origin[0]
             delta_y = event.y_root - self._press_origin[1]
@@ -565,7 +464,9 @@ class UsageLimitWidget(Gtk.Window if Gtk is not None else object):
         self._press_origin = None
         self._press_target = None
         if not self._did_drag:
-            if target and target.startswith("mode:"):
+            if target and target.startswith("collapsed:"):
+                self._expand_from_provider(target.split(":", 1)[1])
+            elif target and target.startswith("mode:"):
                 self._set_view_mode(target.split(":", 1)[1])
             elif target and target.startswith("task:"):
                 task_index = int(target.split(":", 1)[1])
@@ -589,6 +490,8 @@ class UsageLimitWidget(Gtk.Window if Gtk is not None else object):
                 self.area.queue_draw()
             elif target == "resize":
                 return True
+            elif target == "collapse":
+                self._toggle_collapsed()
             elif len(self._limits) > 1:
                 self._selected_limit = (self._selected_limit + 1) % len(self._limits)
                 self.area.queue_draw()
@@ -605,6 +508,14 @@ class UsageLimitWidget(Gtk.Window if Gtk is not None else object):
 
     def _on_tooltip(self, _area: Any, x: int, y: int, _keyboard_mode: bool, tooltip: Any) -> bool:
         base_x, base_y = self._base_point(x, y)
+        if self._collapsed:
+            provider = provider_at(base_x, base_y)
+            if provider is None:
+                return False
+            remaining = provider_remaining(self._all_limits, provider)
+            status = "indisponível" if remaining is None else f"{remaining}% restante"
+            tooltip.set_text(f"{provider}: {status}. Clique para expandir.")
+            return True
         selected_mode = mode_at(base_x, base_y)
         target = f"mode:{selected_mode}" if selected_mode else control_at(base_x, base_y)
         if self._view_mode != "usage" and target == "provider":
@@ -642,6 +553,8 @@ class UsageLimitWidget(Gtk.Window if Gtk is not None else object):
             tooltip.set_text("Desativar modo intangível" if self._click_through else "Ativar modo intangível")
         elif target == "resize":
             tooltip.set_text("Arraste para redimensionar")
+        elif target == "collapse":
+            tooltip.set_text("Recolher na borda direita")
         else:
             return False
         return True
@@ -705,6 +618,9 @@ class UsageLimitWidget(Gtk.Window if Gtk is not None else object):
         if event.keyval == Gdk.KEY_Escape:
             self.close()
             return True
+        if self._collapsed and event.keyval in {Gdk.KEY_Return, Gdk.KEY_KP_Enter, Gdk.KEY_space}:
+            self._expand_from_provider(self._active_provider or "Codex")
+            return True
         if self._view_mode != "usage" and event.keyval in {Gdk.KEY_Left, Gdk.KEY_Right}:
             tasks = visible_tasks(self._tasks, self._view_mode)
             if tasks:
@@ -764,6 +680,7 @@ class UsageLimitWidget(Gtk.Window if Gtk is not None else object):
             height,
             self._monitor_workareas(),
         )
+        self._remember_expanded_position_on_monitor(target_x, target_y)
         self.move(target_x, target_y)
         self._save_position((target_x, target_y))
 
@@ -773,6 +690,17 @@ class UsageLimitWidget(Gtk.Window if Gtk is not None else object):
             return False
         x, y = self.get_position()
         width, height = self.get_size()
+        if self._collapsed:
+            safe_x, safe_y = right_edge_position(
+                x,
+                y,
+                width,
+                height,
+                self._monitor_workareas(),
+            )
+            if (safe_x, safe_y) != (x, y):
+                self.move(safe_x, safe_y)
+            return False
         safe_x, safe_y = clamp_window_position(
             x,
             y,
@@ -792,7 +720,7 @@ class UsageLimitWidget(Gtk.Window if Gtk is not None else object):
     def _on_window_state(self, _widget: Any, event: Any) -> bool:
         self._minimized = bool(event.new_window_state & Gdk.WindowState.ICONIFIED)
         if not self._minimized:
-            self.set_skip_taskbar_hint(False)
+            self.set_skip_taskbar_hint(self._collapsed)
             GLib.idle_add(self._apply_window_layer)
         return False
 
@@ -801,14 +729,15 @@ class UsageLimitWidget(Gtk.Window if Gtk is not None else object):
         self.iconify()
 
     def _apply_window_layer(self) -> bool:
-        self.set_keep_above(self._pinned)
-        if self._pinned:
+        keep_above = self._pinned or self._collapsed
+        self.set_keep_above(keep_above)
+        if keep_above:
             self.stick()
         else:
             self.unstick()
         window = self.get_window()
         if window is not None:
-            window.set_keep_above(self._pinned)
+            window.set_keep_above(keep_above)
         return False
 
     def _apply_input_region(self) -> bool:
@@ -817,14 +746,14 @@ class UsageLimitWidget(Gtk.Window if Gtk is not None else object):
         if window is None:
             return False
         allocation = self.get_allocation()
-        if not self._click_through:
+        if self._collapsed or not self._click_through:
             full_region = cairo.Region(cairo.RectangleInt(0, 0, allocation.width, allocation.height))
             window.input_shape_combine_region(full_region, 0, 0)
             return False
         region = cairo.Region(
             control_region(PASSTHROUGH_CONTROL, allocation.width, allocation.height)
         )
-        for center in (PIN_CONTROL, RESIZE_CONTROL):
+        for center in (PIN_CONTROL, RESIZE_CONTROL, COLLAPSE_CONTROL):
             region.union(cairo.Region(control_region(center, allocation.width, allocation.height)))
         region.union(
             cairo.Region(
@@ -859,9 +788,16 @@ class UsageLimitWidget(Gtk.Window if Gtk is not None else object):
             self._widget_size = clamp_widget_size(position.get("size", WIDGET_SIZE))
             self._pinned = bool(position.get("pinned", True))
             self._click_through = bool(position.get("click_through", False))
+            self._collapsed = bool(position.get("collapsed", False))
             saved_mode = position.get("view_mode", "usage")
             self._view_mode = saved_mode if saved_mode in {"usage", "overview", "attention"} else "usage"
+            if isinstance(position.get("expanded_x"), int) and isinstance(position.get("expanded_y"), int):
+                self._expanded_position = (position["expanded_x"], position["expanded_y"])
             self._apply_window_layer()
+            if self._collapsed:
+                self._apply_collapsed_geometry((int(position["x"]), int(position["y"])))
+                self._sync_collapse_menu_label()
+                return
             self.resize(self._widget_size, widget_height(self._widget_size))
             safe_x, safe_y = clamp_window_position(
                 int(position["x"]),
@@ -885,7 +821,10 @@ class UsageLimitWidget(Gtk.Window if Gtk is not None else object):
                 "pinned": self._pinned,
                 "click_through": self._click_through,
                 "view_mode": self._view_mode,
+                "collapsed": self._collapsed,
             }
+            if self._expanded_position is not None:
+                state["expanded_x"], state["expanded_y"] = self._expanded_position
             self._position_file.write_text(json.dumps(state), encoding="utf-8")
         except OSError:
             pass

@@ -14,6 +14,12 @@ windows, pinning, click-through, resize, theme detection, position persistence,
 minimize/close, low-limit notifications, and a compact `C | A` toggle for
 switching the displayed provider. Provider failures are tolerated
 when another provider returns limits.
+Use the chevron control or `Recolher na borda` in the context menu to collapse
+the widget into two provider capsules fixed to the right edge of the current
+monitor. Each capsule keeps the provider logo, remaining percentage, and a
+rounded usage bar visible. Click a capsule to expand the widget directly into
+that provider; the collapsed state and prior expanded position are restored
+between launches.
 Drag the widget across monitor boundaries, or use `Mover para outro monitor`
 in the context menu to cycle through connected displays while preserving its
 relative screen position. The selected position is persisted immediately.
