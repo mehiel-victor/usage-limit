@@ -9,10 +9,11 @@ from typing import Any, Optional
 try:
     import gi
 
+    gi.require_version("Gdk", "3.0")
     gi.require_version("GdkPixbuf", "2.0")
-    from gi.repository import GdkPixbuf, GLib
+    from gi.repository import Gdk, GdkPixbuf, GLib
 except (ImportError, ValueError):
-    GdkPixbuf = GLib = None  # type: ignore[assignment]
+    Gdk = GdkPixbuf = GLib = None  # type: ignore[assignment]
 
 ASSET_ROOT = Path(__file__).with_name("assets")
 
@@ -62,3 +63,30 @@ def provider_mark(provider: str, size: int = 14) -> Optional[Any]:
     if key not in PROVIDER_MARKS:
         PROVIDER_MARKS[key] = _load_mark(filename, size)
     return PROVIDER_MARKS[key]
+
+
+def paint_monochrome_mark(
+    context: Any,
+    mark: Any,
+    center_x: float,
+    center_y: float,
+    color: str,
+) -> bool:
+    """Paint a provider mark using its alpha only, with no background plate."""
+    if mark is None or Gdk is None:
+        return False
+    Gdk.cairo_set_source_pixbuf(
+        context,
+        mark,
+        center_x - mark.get_width() / 2,
+        center_y - mark.get_height() / 2,
+    )
+    mask = context.get_source()
+    context.set_source_rgba(
+        int(color[1:3], 16) / 255,
+        int(color[3:5], 16) / 255,
+        int(color[5:7], 16) / 255,
+        1.0,
+    )
+    context.mask(mask)
+    return True

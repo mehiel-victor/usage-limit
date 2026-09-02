@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Optional
 
-from model_branding import model_mark, provider_mark
+from model_branding import model_mark, paint_monochrome_mark, provider_mark
 from usage_sources import SUPPORTED_PROVIDERS
 
 try:
@@ -436,21 +436,15 @@ def _draw_utility_controls(
     _draw_icon_control(context, "collapse", COLLAPSE_CONTROL, False, hovered == "collapse", colors)
 
 
-def _draw_provider_mark(context: Any, provider: str, center_x: float, center_y: float) -> None:
+def _draw_provider_mark(
+    context: Any,
+    provider: str,
+    center_x: float,
+    center_y: float,
+    color: str,
+) -> None:
     mark = provider_mark(provider)
-    context.new_path()
-    _set_color(context, "#F7F9FC")
-    context.arc(center_x, center_y, 8, 0, math.tau)
-    context.fill()
-    if mark is None or Gdk is None:
-        return
-    Gdk.cairo_set_source_pixbuf(
-        context,
-        mark,
-        center_x - mark.get_width() / 2,
-        center_y - mark.get_height() / 2,
-    )
-    context.paint()
+    paint_monochrome_mark(context, mark, center_x, center_y, color)
 
 
 def _draw_controls(
@@ -479,7 +473,7 @@ def _draw_controls(
             _rounded_rectangle(context, left, toggle_y - 9, 22, 18, 8)
             _set_color(context, colors.control_active)
             context.fill()
-        _draw_provider_mark(context, provider, left + 11, toggle_y)
+        _draw_provider_mark(context, provider, left + 11, toggle_y, colors.primary)
     _draw_utility_controls(context, pinned, click_through, hovered, colors)
 
 
