@@ -13,8 +13,9 @@ fields that Claude Code sends to a local command.
 
 The widget refreshes every five minutes, supports manual refresh, click-to-cycle
 windows, pinning, click-through, resize, theme detection, position persistence,
-minimize/close, low-limit notifications, and a compact `C | A` toggle for
-switching the displayed provider. Provider failures are tolerated
+minimize/close, and a compact `C | A` toggle for switching the displayed
+provider. The widget does not send desktop or lockscreen notifications.
+Provider failures are tolerated
 when another provider returns limits.
 Claude Code setup is optional. Add `claude_usage_statusline.py` as the
 `statusLine.command` in `~/.claude/settings.json`:
@@ -56,9 +57,6 @@ keys and press Enter, to open the corresponding task in Codex Desktop. Click
 the attention indicator, or press `A`, to open a rounded square queue with
 running, queued, waiting, blocked, and failed tasks. Completed tasks stay out
 of the queue. Each color-coded row opens its task directly in Codex Desktop.
-When a task reaches a native approval breakpoint, the app sends one desktop
-notification. Periodic refreshes do not repeat it; leaving and later re-entering
-an approval breakpoint produces a new notification.
 
 The interface material adapts the optical language of
 [Liquid Glass for GNOME Shell](https://github.com/ryohsuke1231/liquid-glass):
@@ -100,14 +98,3 @@ Optional Codex profiles belong in
 ```
 
 The former `codex-token-window/config.json` remains a read-only fallback.
-
-## Mostrar no lockscreen do Linux
-
-No menu de contexto, ative `Exibir no lockscreen`. O Usage Limit publicará uma
-notificação residente somente quando um chat entrar em um estado não lido:
-concluído, aguardando ação, bloqueado ou com falha. Atualizações periódicas não
-republicam a notificação; depois de dispensada ou aberta, ela só volta em uma
-nova transição. A notificação inclui os limites atuais e os chats afetados.
-Ambientes como GNOME e KDE podem ocultar o conteúdo das notificações na tela
-bloqueada. Nesse caso, habilite notificações no lockscreen nas configurações de
-privacidade do ambiente.

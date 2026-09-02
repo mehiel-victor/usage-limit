@@ -9,6 +9,6 @@ Icon=@ICON@
 Terminal=false
 Categories=Utility;
 Keywords=limites;uso;Codex;Antigravity;
-StartupNotify=true
+StartupNotify=false
 StartupWMClass=usage-limit
 X-GNOME-UsesNotifications=false

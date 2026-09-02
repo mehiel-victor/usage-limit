@@ -27,7 +27,6 @@ from usage_sources import (
     SUPPORTED_PROVIDERS,
     UsageLimit,
     configured_profiles,
-    notify,
     read_antigravity_limits,
     read_claude_limits,
     read_codex_limits,
@@ -56,8 +55,7 @@ from usage_limit_view import (
     widget_height,
 )
 from widget_support import (
-    approval_task_transitions, format_lockscreen_status, log_debug,
-    notify_lockscreen, publish_approval_notifications, task_visual_signature, unread_task_transitions,
+    log_debug, task_visual_signature,
 )
 
 PROVIDER_ERRORS = (OSError, ValueError, TimeoutError, json.JSONDecodeError, RuntimeError, subprocess.SubprocessError)
@@ -77,7 +75,6 @@ except (ImportError, ValueError):
     Gdk = Gio = GLib = Gtk = None  # type: ignore[assignment]
 
 POSITION_FILE = Path(os.environ.get("XDG_STATE_HOME", str(Path.home() / ".local" / "state"))) / "usage-limit" / "position.json"
-LOCKSCREEN_FILE = Path(os.environ.get("XDG_STATE_HOME", str(Path.home() / ".local" / "state"))) / "usage-limit" / "lockscreen.json"
 LEGACY_POSITION_FILE = Path.home() / ".codex" / "token_widget_position.json"
 RUNTIME_ROOT = os.environ.get("XDG_RUNTIME_DIR") or os.environ.get("XDG_CACHE_HOME", str(Path.home() / ".cache"))
 LOCK_FILE = Path(RUNTIME_ROOT) / "usage-limit" / "widget.lock"
@@ -123,11 +120,6 @@ class UsageLimitWidget(CollapsedWindowState, ProviderSelectionState, Gtk.Window 
         self._task_refreshing = False
         self._selected_task = 0
         self._attention_window: Optional[Any] = None
-        self._lockscreen_enabled = self._load_lockscreen_preference()
-        self._known_task_statuses: dict[str, str] = {}
-        self._known_approval_task_ids: set[str] = set()
-        self._task_statuses_initialized = False
-        self._lockscreen_notification_id = 0
 
         self.set_title("Usage Limit")
         self.set_icon_name("usage-limit")
@@ -357,10 +349,6 @@ class UsageLimitWidget(CollapsedWindowState, ProviderSelectionState, Gtk.Window 
             account = Gtk.MenuItem.new_with_label("Alternar conta do Codex")
             account.connect("activate", lambda _item: self._next_account())
             menu.append(account)
-        lockscreen = Gtk.CheckMenuItem.new_with_label("Exibir no lockscreen")
-        lockscreen.set_active(self._lockscreen_enabled)
-        lockscreen.connect("toggled", self._toggle_lockscreen)
-        menu.append(lockscreen)
         move_monitor = Gtk.MenuItem.new_with_label("Mover para outro monitor")
         move_monitor.set_sensitive(len(self._monitor_workareas()) > 1)
         move_monitor.connect("activate", lambda _item: self._move_to_next_monitor())
@@ -379,40 +367,11 @@ class UsageLimitWidget(CollapsedWindowState, ProviderSelectionState, Gtk.Window 
         menu.show_all()
         return menu
 
-    def _load_lockscreen_preference(self) -> bool:
-        try:
-            value = json.loads(LOCKSCREEN_FILE.read_text(encoding="utf-8"))
-            return bool(value.get("enabled")) if isinstance(value, dict) else False
-        except (OSError, ValueError):
-            return False
-
-    def _toggle_lockscreen(self, item: Any) -> None:
-        self._lockscreen_enabled = bool(item.get_active())
-        try:
-            LOCKSCREEN_FILE.parent.mkdir(parents=True, exist_ok=True)
-            LOCKSCREEN_FILE.write_text(
-                json.dumps({"enabled": self._lockscreen_enabled}) + "\n",
-                encoding="utf-8",
-            )
-        except OSError:
-            return
-
-    def _publish_lockscreen(self, unread_tasks: list[MonitoredTask]) -> None:
-        if not self._lockscreen_enabled or not unread_tasks:
-            return
-        self._lockscreen_notification_id = notify_lockscreen(
-            format_lockscreen_status(self._all_limits, unread_tasks),
-            self._lockscreen_notification_id,
-        )
-
     def _next_account(self) -> None:
         self._profile_index = (self._profile_index + 1) % len(self._profiles)
         self._task_source.close()
         self._task_source = CodexTaskSource(self._profiles[self._profile_index]["home"])
         self._task_refreshing = False
-        self._known_task_statuses = {}
-        self._known_approval_task_ids = set()
-        self._task_statuses_initialized = False
         self._all_limits = []
         self._limits = []
         self._error = False
@@ -938,18 +897,7 @@ class UsageLimitWidget(CollapsedWindowState, ProviderSelectionState, Gtk.Window 
         changed = error != self._task_error
         self._task_error = error
         if not error:
-            unread_tasks = unread_task_transitions(self._known_task_statuses, tasks)
-            approval_tasks, approval_task_ids = approval_task_transitions(
-                self._known_approval_task_ids,
-                tasks,
-            )
-            self._known_task_statuses.update({task.id: task.status for task in tasks})
-            self._known_approval_task_ids = approval_task_ids
             self._tasks = tasks
-            publish_approval_notifications(approval_tasks)
-            if self._task_statuses_initialized:
-                self._publish_lockscreen(unread_tasks)
-            self._task_statuses_initialized = True
             changed = changed or previous_signature != task_visual_signature(tasks)
             shown = visible_tasks(tasks, self._view_mode)
             self._selected_task = min(self._selected_task, max(0, len(shown) - 1))

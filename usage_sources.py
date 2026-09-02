@@ -313,17 +313,3 @@ def configured_profiles() -> list[dict[str, str]]:
         if result:
             return result
     return [{"name": "Current account", "home": ""}]
-
-
-def notify(title: str, message: str) -> None:
-    executable = shutil.which("notify-send")
-    if executable is None:
-        return
-    try:
-        subprocess.run(
-            [executable, "-a", "Usage Limit", "-i", "usage-limit", title, message],
-            check=False,
-            timeout=3,
-        )
-    except (OSError, subprocess.SubprocessError):
-        pass
