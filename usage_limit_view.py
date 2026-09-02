@@ -445,6 +445,9 @@ def _draw_controls(
     active_provider: Optional[str],
     available_providers: set[str],
 ) -> None:
+    if len(available_providers) < 2:
+        _draw_utility_controls(context, pinned, click_through, hovered, colors)
+        return
     toggle_x, toggle_y = PROVIDER_TOGGLE
     toggle_hovered = hovered == "provider" and len(available_providers) > 1
     toggle_width = len(SUPPORTED_PROVIDERS) * 22

@@ -179,6 +179,7 @@ class UsageLimitWidget(CollapsedWindowState, ProviderSelectionState, Gtk.Window 
     def _render_limits(self, limits: list[UsageLimit]) -> None:
         self._all_limits = limits
         providers = {limit.provider for limit in limits}
+        self._provider_menu_item.set_visible(len(providers) >= 2)
         if self._active_provider not in providers:
             self._active_provider = next((provider for provider in SUPPORTED_PROVIDERS if provider in providers), None)
         self._limits = [limit for limit in limits if limit.provider == self._active_provider]
@@ -326,6 +327,8 @@ class UsageLimitWidget(CollapsedWindowState, ProviderSelectionState, Gtk.Window 
             return True
         selected_mode = mode_at(base_x, base_y)
         self._press_target = f"mode:{selected_mode}" if selected_mode else control_at(base_x, base_y)
+        if self._press_target == "provider" and len({limit.provider for limit in self._all_limits}) < 2:
+            self._press_target = None
         if self._view_mode != "usage" and self._press_target == "provider":
             self._press_target = None
         shown_tasks = visible_tasks(self._tasks, self._view_mode)
@@ -345,9 +348,11 @@ class UsageLimitWidget(CollapsedWindowState, ProviderSelectionState, Gtk.Window 
         refresh = Gtk.MenuItem.new_with_label("Atualizar agora")
         refresh.connect("activate", lambda _item: self.refresh())
         menu.append(refresh)
-        toggle_prov = Gtk.MenuItem.new_with_label("Alternar provedor (Codex / Antigravity / Claude)")
-        toggle_prov.connect("activate", lambda _item: self._toggle_provider())
-        menu.append(toggle_prov)
+        self._provider_menu_item = Gtk.MenuItem.new_with_label("Alternar provedor (Codex / Antigravity / Claude)")
+        self._provider_menu_item.set_no_show_all(True)
+        self._provider_menu_item.set_visible(False)
+        self._provider_menu_item.connect("activate", lambda _item: self._toggle_provider())
+        menu.append(self._provider_menu_item)
         if len(self._profiles) > 1:
             account = Gtk.MenuItem.new_with_label("Alternar conta do Codex")
             account.connect("activate", lambda _item: self._next_account())
@@ -445,6 +450,8 @@ class UsageLimitWidget(CollapsedWindowState, ProviderSelectionState, Gtk.Window 
             base_x, base_y = self._base_point(event.x, event.y)
             selected_mode = mode_at(base_x, base_y)
             hovered = f"mode:{selected_mode}" if selected_mode else control_at(base_x, base_y)
+            if hovered == "provider" and len({limit.provider for limit in self._all_limits}) < 2:
+                hovered = None
             if self._view_mode != "usage" and hovered == "provider":
                 hovered = None
             if self._view_mode != "usage" and hovered is None:
@@ -520,6 +527,8 @@ class UsageLimitWidget(CollapsedWindowState, ProviderSelectionState, Gtk.Window 
             return True
         selected_mode = mode_at(base_x, base_y)
         target = f"mode:{selected_mode}" if selected_mode else control_at(base_x, base_y)
+        if target == "provider" and len({limit.provider for limit in self._all_limits}) < 2:
+            target = None
         if self._view_mode != "usage" and target == "provider":
             target = None
         over_attention = self._view_mode != "usage" and attention_button_at(base_x, base_y)
@@ -754,14 +763,15 @@ class UsageLimitWidget(CollapsedWindowState, ProviderSelectionState, Gtk.Window 
             )
         )
         if self._view_mode == "usage":
-            provider_region = control_region(
-                PROVIDER_TOGGLE,
-                allocation.width,
-                allocation.height,
-                36,
-                11,
-            )
-            region.union(cairo.Region(provider_region))
+            if len({limit.provider for limit in self._all_limits}) >= 2:
+                provider_region = control_region(
+                    PROVIDER_TOGGLE,
+                    allocation.width,
+                    allocation.height,
+                    36,
+                    11,
+                )
+                region.union(cairo.Region(provider_region))
         else:
             attention_region = control_region(
                 ATTENTION_BUTTON_CENTER,
@@ -891,6 +901,7 @@ class UsageLimitWidget(CollapsedWindowState, ProviderSelectionState, Gtk.Window 
             self._all_limits = []
             self._limits = []
             self._active_provider = None
+            self._provider_menu_item.set_visible(False)
             self._selected_limit = 0
             self._critical_phase = False
             self.area.queue_draw()
