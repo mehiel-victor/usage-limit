@@ -9,6 +9,7 @@ from datetime import datetime
 from typing import Any, Optional
 
 from model_branding import model_mark
+from usage_sources import SUPPORTED_PROVIDERS
 
 try:
     import cairo
@@ -233,7 +234,7 @@ def _draw_model_watermark(context: Any, limit: Any, color: str) -> None:
 
 
 def control_at(x: float, y: float) -> Optional[str]:
-    if abs(x - PROVIDER_TOGGLE[0]) <= 24 and abs(y - PROVIDER_TOGGLE[1]) <= 11:
+    if abs(x - PROVIDER_TOGGLE[0]) <= 36 and abs(y - PROVIDER_TOGGLE[1]) <= 11:
         return "provider"
     for name, center in (
         ("passthrough", PASSTHROUGH_CONTROL),
@@ -446,11 +447,13 @@ def _draw_controls(
 ) -> None:
     toggle_x, toggle_y = PROVIDER_TOGGLE
     toggle_hovered = hovered == "provider" and len(available_providers) > 1
-    _rounded_rectangle(context, toggle_x - 23, toggle_y - 10, 46, 20, 10)
+    toggle_width = len(SUPPORTED_PROVIDERS) * 22
+    _rounded_rectangle(context, toggle_x - toggle_width / 2, toggle_y - 10, toggle_width, 20, 10)
     _set_color(context, colors.control_hover if toggle_hovered else colors.control)
     context.fill()
-    for index, provider in enumerate(("Codex", "Antigravity")):
-        left = toggle_x - 22 + index * 22
+    labels = {"Codex": "C", "Antigravity": "A", "Claude": "Cl"}
+    for index, provider in enumerate(SUPPORTED_PROVIDERS):
+        left = toggle_x - toggle_width / 2 + index * 22
         active, enabled = provider == active_provider, provider in available_providers
         if active and enabled:
             _rounded_rectangle(context, left, toggle_y - 9, 22, 18, 8)
@@ -459,7 +462,7 @@ def _draw_controls(
         color = colors.primary if active and enabled else colors.icon if enabled else colors.tertiary
         _draw_text(
             context,
-            "C" if index == 0 else "A",
+            labels[provider],
             toggle_y,
             "Sans Bold 8",
             color,

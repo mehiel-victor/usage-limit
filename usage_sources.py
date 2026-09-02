@@ -14,11 +14,15 @@ from pathlib import Path
 from typing import Any, Optional
 
 DEFAULT_TIMEOUT = 10
+SUPPORTED_PROVIDERS = ("Codex", "Antigravity", "Claude")
 CONFIG_ROOT = Path(
     os.environ.get("XDG_CONFIG_HOME", str(Path.home() / ".config"))
 )
 CONFIG_FILE = CONFIG_ROOT / "usage-limit" / "config.json"
 LEGACY_CONFIG_FILE = CONFIG_ROOT / "codex-token-window" / "config.json"
+CLAUDE_STATE_FILE = Path(
+    os.environ.get("XDG_STATE_HOME", str(Path.home() / ".local" / "state"))
+) / "usage-limit" / "claude.json"
 
 
 @dataclass(frozen=True)
@@ -254,6 +258,39 @@ def read_antigravity_limits() -> list[UsageLimit]:
     if not isinstance(payload, dict):
         raise ValueError("Antigravity returned invalid usage data")
     return parse_antigravity_limits(payload)
+
+
+def _claude_window(
+    limits: list[UsageLimit],
+    window: str,
+    data: Any,
+) -> None:
+    if not isinstance(data, dict):
+        return
+    used = _percent(data.get("used_percentage"))
+    if used is None:
+        return
+    reset = data.get("resets_at")
+    limits.append(UsageLimit("Claude", "Claude Code", window, used, reset if isinstance(reset, int) else None))
+
+
+def parse_claude_limits(payload: dict[str, Any]) -> list[UsageLimit]:
+    rate_limits = payload.get("rate_limits")
+    if not isinstance(rate_limits, dict):
+        raise ValueError("Claude state has no rate limits")
+    limits: list[UsageLimit] = []
+    _claude_window(limits, "5h", rate_limits.get("five_hour"))
+    _claude_window(limits, "7 dias", rate_limits.get("seven_day"))
+    if not limits:
+        raise ValueError("Claude returned no usage-limit windows")
+    return limits
+
+
+def read_claude_limits() -> list[UsageLimit]:
+    payload = json.loads(CLAUDE_STATE_FILE.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        raise ValueError("Claude state is invalid")
+    return parse_claude_limits(payload)
 
 
 def configured_profiles() -> list[dict[str, str]]:

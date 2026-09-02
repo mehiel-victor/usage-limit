@@ -47,7 +47,7 @@ def format_lockscreen_status(limits: list[UsageLimit], tasks: list[MonitoredTask
     """Build a concise notification containing limits and unread tasks."""
     usage = " · ".join(
         f"{limit.provider}: {limit.remaining_percent}%"
-        for limit in limits[:2]
+        for limit in limits[:3]
     ) or "Limites indisponíveis"
     if not tasks:
         return f"{usage}\nNenhum chat não lido"

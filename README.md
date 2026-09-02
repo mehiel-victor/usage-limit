@@ -7,13 +7,30 @@ the task view opens the active task queue. Codex limits are read
 through its local `account/rateLimits/read`
 app-server method. Antigravity is read through the documented structured
 `agy -p /usage --output-format json` command; no credentials or provider
-configuration files are accessed.
+configuration files are accessed. Claude Code is supported through its
+documented custom status-line JSON contract, using only the `rate_limits`
+fields that Claude Code sends to a local command.
 
 The widget refreshes every five minutes, supports manual refresh, click-to-cycle
 windows, pinning, click-through, resize, theme detection, position persistence,
 minimize/close, low-limit notifications, and a compact `C | A` toggle for
 switching the displayed provider. Provider failures are tolerated
 when another provider returns limits.
+Claude Code setup is optional. Add `claude_usage_statusline.py` as the
+`statusLine.command` in `~/.claude/settings.json`:
+
+```json
+{
+  "statusLine": {
+    "type": "command",
+    "command": "/absolute/path/to/claude_usage_statusline.py"
+  }
+}
+```
+
+The bridge stores only the latest rate-limit snapshot under the user's local
+Usage Limit state directory. If Claude Code is not configured, Claude simply
+remains unavailable in the provider switcher.
 The resize limit follows the usable dimensions of the widget's current monitor
 rather than a fixed pixel cap. Each view keeps its own aspect ratio so the full
 interface remains visible at maximum size.
@@ -56,8 +73,8 @@ transparency, edge highlights, and soft separation shadows.
 ## Requirements and launch
 
 The launcher expects Python 3, GTK 3, PyGObject, and Cairo. Install and sign in
-to at least one provider: Codex, or Antigravity CLI 1.1.8 or newer (the first
-release with structured print output). Then run:
+to at least one provider: Codex, Antigravity CLI 1.1.8 or newer, or Claude Code
+with the optional status-line bridge above. Then run:
 
 ```bash
 ./launch-usage-limit

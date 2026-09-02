@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from usage_limit_view import _draw_text, _rounded_rectangle, _set_color, theme_colors, usage_color
+from usage_sources import SUPPORTED_PROVIDERS
 
 try:
     import cairo
@@ -23,13 +24,13 @@ except (ImportError, ValueError):
     Gdk = GdkPixbuf = GLib = None  # type: ignore[assignment]
 
 COLLAPSED_WIDTH = 86
-COLLAPSED_HEIGHT = 146
+COLLAPSED_HEIGHT = 218
 CAPSULE_X = 8
 CAPSULE_WIDTH = COLLAPSED_WIDTH - CAPSULE_X
 CAPSULE_HEIGHT = 66
 CAPSULE_GAP = 6
-CAPSULE_TOPS = (4, 4 + CAPSULE_HEIGHT + CAPSULE_GAP)
-PROVIDERS = ("Codex", "Antigravity")
+CAPSULE_TOPS = tuple(4 + index * (CAPSULE_HEIGHT + CAPSULE_GAP) for index in range(len(SUPPORTED_PROVIDERS)))
+PROVIDERS = SUPPORTED_PROVIDERS
 ASSET_ROOT = Path(__file__).with_name("assets")
 
 
@@ -51,6 +52,7 @@ if GdkPixbuf is not None:
     PROVIDER_LOGOS = {
         "Codex": _load_logo("openai-symbol.svg", 23),
         "Antigravity": _load_logo("antigravity-icon.png", 25),
+        "Claude": _load_logo("claude-symbol.svg", 23),
     }
 else:
     PROVIDER_LOGOS = {}
