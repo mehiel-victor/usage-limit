@@ -33,6 +33,12 @@ MODEL_MARKS = {
     "antigravity": _load_mark("antigravity-icon.png", 150),
     "claude": _load_mark("claude-symbol.svg", 150),
 }
+PROVIDER_FILES = {
+    "Codex": "openai-symbol.svg",
+    "Antigravity": "antigravity-icon.png",
+    "Claude": "claude-symbol.svg",
+}
+PROVIDER_MARKS: dict[tuple[str, int], Any] = {}
 
 
 def model_mark(model_name: str, provider: str) -> Optional[Any]:
@@ -45,3 +51,14 @@ def model_mark(model_name: str, provider: str) -> Optional[Any]:
     if provider == "Antigravity":
         return MODEL_MARKS.get("antigravity")
     return None
+
+
+def provider_mark(provider: str, size: int = 14) -> Optional[Any]:
+    """Load a small provider mark for compact controls."""
+    filename = PROVIDER_FILES.get(provider)
+    if filename is None:
+        return None
+    key = provider, size
+    if key not in PROVIDER_MARKS:
+        PROVIDER_MARKS[key] = _load_mark(filename, size)
+    return PROVIDER_MARKS[key]

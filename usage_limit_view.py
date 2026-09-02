@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Optional
 
-from model_branding import model_mark
+from model_branding import model_mark, provider_mark
 from usage_sources import SUPPORTED_PROVIDERS
 
 try:
@@ -436,6 +436,23 @@ def _draw_utility_controls(
     _draw_icon_control(context, "collapse", COLLAPSE_CONTROL, False, hovered == "collapse", colors)
 
 
+def _draw_provider_mark(context: Any, provider: str, center_x: float, center_y: float) -> None:
+    mark = provider_mark(provider)
+    context.new_path()
+    _set_color(context, "#F7F9FC")
+    context.arc(center_x, center_y, 8, 0, math.tau)
+    context.fill()
+    if mark is None or Gdk is None:
+        return
+    Gdk.cairo_set_source_pixbuf(
+        context,
+        mark,
+        center_x - mark.get_width() / 2,
+        center_y - mark.get_height() / 2,
+    )
+    context.paint()
+
+
 def _draw_controls(
     context: Any,
     pinned: bool,
@@ -450,28 +467,19 @@ def _draw_controls(
         return
     toggle_x, toggle_y = PROVIDER_TOGGLE
     toggle_hovered = hovered == "provider" and len(available_providers) > 1
-    toggle_width = len(SUPPORTED_PROVIDERS) * 22
+    providers = [provider for provider in SUPPORTED_PROVIDERS if provider in available_providers]
+    toggle_width = len(providers) * 22
     _rounded_rectangle(context, toggle_x - toggle_width / 2, toggle_y - 10, toggle_width, 20, 10)
     _set_color(context, colors.control_hover if toggle_hovered else colors.control)
     context.fill()
-    labels = {"Codex": "C", "Antigravity": "A", "Claude": "Cl"}
-    for index, provider in enumerate(SUPPORTED_PROVIDERS):
+    for index, provider in enumerate(providers):
         left = toggle_x - toggle_width / 2 + index * 22
         active, enabled = provider == active_provider, provider in available_providers
         if active and enabled:
             _rounded_rectangle(context, left, toggle_y - 9, 22, 18, 8)
             _set_color(context, colors.control_active)
             context.fill()
-        color = colors.primary if active and enabled else colors.icon if enabled else colors.tertiary
-        _draw_text(
-            context,
-            labels[provider],
-            toggle_y,
-            "Sans Bold 8",
-            color,
-            background_color=colors.background,
-            center_x=left + 11,
-        )
+        _draw_provider_mark(context, provider, left + 11, toggle_y)
     _draw_utility_controls(context, pinned, click_through, hovered, colors)
 
 
