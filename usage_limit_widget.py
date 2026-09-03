@@ -32,7 +32,10 @@ from usage_sources import (
     read_codex_limits,
 )
 from task_sources import CodexTaskSource, MonitoredTask, open_codex_task
-from task_status_view import ATTENTION_BUTTON_CENTER, attention_button_at, draw_mode_toggle, draw_task_status, mode_at, segment_at, task_tooltip, visible_tasks
+from task_status_view import (
+    ATTENTION_BUTTON_CENTER, attention_button_at, draw_mode_toggle, draw_task_status,
+    draw_worktree_status, mode_at, segment_at, task_tooltip, visible_tasks,
+)
 from usage_limit_view import (
     COLLAPSE_CONTROL,
     MIN_WIDGET_SIZE,
@@ -57,6 +60,7 @@ from usage_limit_view import (
 from widget_support import (
     log_debug, task_visual_signature,
 )
+from worktree_sources import WorktreeSnapshot, read_worktrees, worktree_paths
 
 PROVIDER_ERRORS = (OSError, ValueError, TimeoutError, json.JSONDecodeError, RuntimeError, subprocess.SubprocessError)
 
@@ -116,6 +120,7 @@ class UsageLimitWidget(CollapsedWindowState, ProviderSelectionState, Gtk.Window 
         self._task_source = CodexTaskSource(self._profiles[0]["home"])
         self._view_mode = "usage"
         self._tasks: list[MonitoredTask] = []
+        self._worktrees: list[WorktreeSnapshot] = []
         self._task_error = False
         self._task_refreshing = False
         self._selected_task = 0
@@ -210,6 +215,14 @@ class UsageLimitWidget(CollapsedWindowState, ProviderSelectionState, Gtk.Window 
                 self._critical_phase and self._has_critical_limit(),
             )
             draw_mode_toggle(context, self._view_mode, self._hovered_control, self._dark_mode)
+        elif self._view_mode == "worktrees":
+            draw_worktree_status(
+                context,
+                self._worktrees,
+                self._hovered_control,
+                self._task_error,
+                self._dark_mode,
+            )
         else:
             draw_task_status(
                 context,
@@ -345,6 +358,9 @@ class UsageLimitWidget(CollapsedWindowState, ProviderSelectionState, Gtk.Window 
         self._provider_menu_item.set_visible(False)
         self._provider_menu_item.connect("activate", lambda _item: self._toggle_provider())
         menu.append(self._provider_menu_item)
+        git_view = Gtk.MenuItem.new_with_label("Mostrar worktrees e status do Git")
+        git_view.connect("activate", lambda _item: self._set_view_mode("worktrees"))
+        menu.append(git_view)
         if len(self._profiles) > 1:
             account = Gtk.MenuItem.new_with_label("Alternar conta do Codex")
             account.connect("activate", lambda _item: self._next_account())
@@ -531,7 +547,7 @@ class UsageLimitWidget(CollapsedWindowState, ProviderSelectionState, Gtk.Window 
         return True
 
     def _set_view_mode(self, mode: str) -> None:
-        if mode not in {"usage", "overview", "attention"} or mode == self._view_mode:
+        if mode not in {"usage", "overview", "attention", "worktrees"} or mode == self._view_mode:
             return
         self._view_mode = mode
         self._selected_task = 0
@@ -748,7 +764,7 @@ class UsageLimitWidget(CollapsedWindowState, ProviderSelectionState, Gtk.Window 
         try:
             position = json.loads(position_file.read_text(encoding="utf-8"))
             saved_mode = position.get("view_mode", "usage")
-            self._view_mode = saved_mode if saved_mode in {"usage", "overview", "attention"} else "usage"
+            self._view_mode = saved_mode if saved_mode in {"usage", "overview", "attention", "worktrees"} else "usage"
             self._widget_size = clamp_widget_size(position.get("size", WIDGET_SIZE), self._view_mode, self._monitor_workareas(), (int(position["x"]), int(position["y"])))
             self._pinned = bool(position.get("pinned", True))
             self._click_through = bool(position.get("click_through", False))
@@ -894,15 +910,19 @@ class UsageLimitWidget(CollapsedWindowState, ProviderSelectionState, Gtk.Window 
             return False
         self._task_refreshing = False
         previous_signature = task_visual_signature(self._tasks)
+        previous_worktrees = self._worktrees
         changed = error != self._task_error
         self._task_error = error
         if not error:
             self._tasks = tasks
             changed = changed or previous_signature != task_visual_signature(tasks)
+            self._worktrees = read_worktrees(worktree_paths(tasks))
+            changed = changed or previous_worktrees != self._worktrees
             shown = visible_tasks(tasks, self._view_mode)
             self._selected_task = min(self._selected_task, max(0, len(shown) - 1))
         else:
             self._tasks = []
+            self._worktrees = []
             self._selected_task = 0
         if self._view_mode != "usage" and changed:
             self.area.queue_draw()

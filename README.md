@@ -1,7 +1,7 @@
 # Usage Limit & Task Status
 
 Lightweight GTK/Cairo floating widget showing usage limits and the status of
-recent local Codex tasks. The floating `Limites | Tarefas` control switches
+recent local Codex tasks. The floating `Limites | Tarefas | Git` control switches
 between provider usage and recent tasks; the circular attention button inside
 the task view opens the active task queue. Codex limits are read
 through its local `account/rateLimits/read`
@@ -57,6 +57,13 @@ keys and press Enter, to open the corresponding task in Codex Desktop. Click
 the attention indicator, or press `A`, to open a rounded square queue with
 running, queued, waiting, blocked, and failed tasks. Completed tasks stay out
 of the queue. Each color-coded row opens its task directly in Codex Desktop.
+
+The `Git` view shows active worktrees referenced by the monitored Codex tasks.
+It reads `git worktree list` and compares each branch with the locally known
+`origin/main` (falling back to `upstream/main` or local `main`). A branch ahead
+of that reference is marked with the number of commits not sent to the remote;
+local uncommitted changes are shown separately. This view is strictly
+read-only and does not fetch, merge, push, checkout, or change any worktree.
 
 The interface material adapts the optical language of
 [Liquid Glass for GNOME Shell](https://github.com/ryohsuke1231/liquid-glass):

@@ -22,11 +22,12 @@ except (ImportError, ValueError):
     Pango = PangoCairo = None  # type: ignore[assignment]
 
 from task_sources import ATTENTION_STATUSES, MonitoredTask
+from worktree_sources import WorktreeSnapshot
 from usage_limit_view import adaptive_text_color, theme_colors
 
 BASE_WIDTH = 240
 BASE_HEIGHT = 360
-MODE_TOGGLE_RECT = (49, 28, 142, 26)
+MODE_TOGGLE_RECT = (40, 28, 160, 26)
 RING_CENTER = (120, 176)
 RING_RADIUS = 106
 RING_WIDTH = 20
@@ -101,8 +102,8 @@ def draw_mode_toggle(context: Any, mode: str, hovered: Optional[str], dark_mode:
     _rounded_rect(context, x, y, width, height, height / 2)
     _set_color(context, palette.control)
     context.fill()
-    selected_mode = "usage" if mode == "usage" else "overview"
-    labels = (("usage", "Limites"), ("overview", "Tarefas"))
+    selected_mode = mode if mode in {"usage", "overview", "worktrees"} else "overview"
+    labels = (("usage", "Limites"), ("overview", "Tarefas"), ("worktrees", "Git"))
     item_width = width / len(labels)
     for index, (value, _label) in enumerate(labels):
         left = x + index * item_width
@@ -138,7 +139,7 @@ def mode_at(x: float, y: float) -> Optional[str]:
     left, top, width, height = MODE_TOGGLE_RECT
     if not (left <= x <= left + width and top <= y <= top + height):
         return None
-    modes = ("usage", "overview")
+    modes = ("usage", "overview", "worktrees")
     index = min(len(modes) - 1, int((x - left) / (width / len(modes))))
     return modes[index]
 
@@ -331,6 +332,64 @@ def draw_task_status(
         dark_mode,
     )
     _draw_legend(context, tasks, dark_mode)
+
+
+def _worktree_label(worktree: WorktreeSnapshot) -> tuple[str, str, str]:
+    path = worktree.path.rstrip("/").rsplit("/", 1)[-1] or worktree.path
+    if worktree.error:
+        state = worktree.error
+        color = "#F59E0B"
+    elif worktree.unpublished:
+        state = f"{worktree.ahead_of_main} commit{'s' if worktree.ahead_of_main != 1 else ''} não enviado"
+        color = "#F59E0B"
+    elif worktree.dirty:
+        state = "alterações locais"
+        color = "#8290A8"
+    else:
+        state = "sincronizada"
+        color = "#62A47B"
+    return f"{path} · {worktree.branch}", state, color
+
+
+def draw_worktree_status(
+    context: Any,
+    worktrees: list[WorktreeSnapshot],
+    hovered: Optional[str],
+    error: bool,
+    dark_mode: bool,
+) -> None:
+    context.set_antialias(cairo.ANTIALIAS_BEST)
+    context.set_operator(cairo.OPERATOR_CLEAR)
+    context.paint()
+    context.set_operator(cairo.OPERATOR_OVER)
+    palette = theme_colors(dark_mode)
+    context.new_path()
+    _set_color(context, palette.background)
+    context.arc(120, 176, 112, 0, math.tau)
+    context.fill()
+    draw_mode_toggle(context, "worktrees", hovered, dark_mode)
+    if error:
+        _text(context, "Sem acesso ao Git", 120, 164, "Sans Bold 12", palette.primary, palette.background)
+        _text(context, "Use Atualizar agora", 120, 188, "Sans 8", palette.secondary, palette.background)
+        return
+    if not worktrees:
+        _text(context, "Nenhuma worktree", 120, 164, "Sans Bold 12", palette.primary, palette.background)
+        _text(context, "Tarefas locais ainda não usam Git", 120, 188, "Sans 8", palette.secondary, palette.background, 180)
+        return
+    _text(context, f"{len(worktrees)} worktree{'s' if len(worktrees) != 1 else ''} ativa{'s' if len(worktrees) != 1 else ''}", 120, 68, "Sans Bold 11", palette.primary, palette.background)
+    _text(context, "comparadas com main remoto", 120, 86, "Sans Medium 7.5", palette.secondary, palette.background)
+    for index, worktree in enumerate(worktrees[:4]):
+        y = 116 + index * 42
+        title, state, color = _worktree_label(worktree)
+        _set_color(context, color)
+        context.arc(27, y, 4, 0, math.tau)
+        context.fill()
+        _text(context, title, 119, y - 7, "Sans Bold 7.5", palette.primary, palette.background, 176)
+        _text(context, state, 119, y + 8, "Sans Medium 7", color, palette.background, 176)
+    if len(worktrees) > 4:
+        _text(context, f"+ {len(worktrees) - 4} worktrees", 120, 294, "Sans Medium 7", palette.secondary, palette.background)
+    else:
+        _text(context, "origin/main · leitura local", 120, 294, "Sans Medium 7", palette.secondary, palette.background)
 
 
 def segment_at(x: float, y: float, task_count: int) -> Optional[int]:
