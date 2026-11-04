@@ -25,29 +25,34 @@ credentials, account snapshots, task transcripts, or personal worktree paths.
 
 | Area | Files |
 | --- | --- |
-| Usage adapters and profiles | `usage_sources.py`, `claude_usage_statusline.py` |
+| Usage adapters and profiles | `usage_sources.py` |
 | Task state and navigation | `task_sources.py`, `attention_queue_window.py` |
-| Read-only Git snapshots | `worktree_sources.py` |
+| GNOME panel and quota groups | `usage_limit_panel.py`, `panel_model.py`, `panel_icons.py` |
 | Cairo views and branding | `usage_limit_view.py`, `task_status_view.py`, `collapsed_usage_view.py`, `model_branding.py` |
-| Window behavior | `usage_limit_widget.py`, `collapsed_window_state.py`, `provider_selection_state.py` |
-| Desktop installation | `install.sh`, `uninstall.sh`, `usage-limit.desktop.template` |
+| Window behavior and notifications | `usage_limit_widget.py`, `collapsed_window_state.py`, `widget_support.py` |
+| Desktop installation | `install.sh`, `install_panel.py`, `uninstall.sh`, `usage-limit.desktop.template` |
 
 ## Check your change
 
-Run the same syntax and import checks used by CI:
+Run the same regression, syntax, and import checks used by CI. The panel check
+also requires the optional Ayatana dependency documented in the README:
 
 ```bash
+python3 -m unittest discover -s . -p 'test_*.py' -v
 python3 -m compileall -q ./*.py
 sh -n install.sh
 sh -n uninstall.sh
+sh -n launch-usage-limit-panel
 bash -n launch-usage-limit
 python3 -c 'import usage_limit_widget'
+./launch-usage-limit-panel --check
 git diff --check
 ```
 
-CI checks Python syntax, shell syntax, and application imports with GTK installed.
-It does not exercise provider accounts or desktop interactions. There is not
-yet an automated behavioral test suite; adding focused tests is welcome.
+CI checks quota grouping, panel icon rendering, installer preservation, widget
+activation, Python/shell syntax, and imports with GTK/Ayatana installed.
+It does not exercise provider accounts or a live GNOME desktop session.
+Add tests alongside the existing `test_*.py` files without real credentials.
 
 For behavior changes, add a regression test when practical and explain the
 manual checks in your PR. Use synthetic provider responses instead of real

@@ -7,8 +7,6 @@ from pathlib import Path
 from typing import Any, Optional
 
 from usage_limit_view import _draw_text, _rounded_rectangle, _set_color, theme_colors, usage_color
-from model_branding import paint_monochrome_mark
-from usage_sources import SUPPORTED_PROVIDERS
 
 try:
     import cairo
@@ -25,13 +23,13 @@ except (ImportError, ValueError):
     Gdk = GdkPixbuf = GLib = None  # type: ignore[assignment]
 
 COLLAPSED_WIDTH = 86
-COLLAPSED_HEIGHT = 218
+COLLAPSED_HEIGHT = 146
 CAPSULE_X = 8
 CAPSULE_WIDTH = COLLAPSED_WIDTH - CAPSULE_X
 CAPSULE_HEIGHT = 66
 CAPSULE_GAP = 6
-CAPSULE_TOPS = tuple(4 + index * (CAPSULE_HEIGHT + CAPSULE_GAP) for index in range(len(SUPPORTED_PROVIDERS)))
-PROVIDERS = SUPPORTED_PROVIDERS
+CAPSULE_TOPS = (4, 4 + CAPSULE_HEIGHT + CAPSULE_GAP)
+PROVIDERS = ("Codex", "Antigravity")
 ASSET_ROOT = Path(__file__).with_name("assets")
 
 
@@ -53,7 +51,6 @@ if GdkPixbuf is not None:
     PROVIDER_LOGOS = {
         "Codex": _load_logo("openai-symbol.svg", 23),
         "Antigravity": _load_logo("antigravity-icon.png", 25),
-        "Claude": _load_logo("claude-symbol.svg", 23),
     }
 else:
     PROVIDER_LOGOS = {}
@@ -99,9 +96,32 @@ def right_edge_position(
     return docked_x, docked_y
 
 
-def _draw_logo(context: Any, provider: str, center_y: float, color: str) -> None:
+def _draw_logo(context: Any, provider: str, center_y: float) -> None:
+    context.new_path()
+    _set_color(context, "#F7F9FC")
+    context.arc(33, center_y, 17, 0, 6.283185307179586)
+    context.fill()
     logo = PROVIDER_LOGOS.get(provider)
-    paint_monochrome_mark(context, logo, 33, center_y, color)
+    if logo is None or Gdk is None:
+        _draw_text(
+            context,
+            provider[0],
+            center_y,
+            "Sans Bold 11",
+            "#202124",
+            background_color="#F7F9FC",
+            center_x=33,
+        )
+        return
+    context.save()
+    Gdk.cairo_set_source_pixbuf(
+        context,
+        logo,
+        33 - logo.get_width() / 2,
+        center_y - logo.get_height() / 2,
+    )
+    context.paint()
+    context.restore()
 
 
 def _draw_usage_bar(context: Any, remaining: Optional[int], top: int, colors: Any) -> None:
@@ -147,7 +167,7 @@ def draw_collapsed_widget(
         )
         _set_color(context, colors.control_hover if hovered_provider == provider else colors.background, 0.97)
         context.fill()
-        _draw_logo(context, provider, top + 25, colors.primary)
+        _draw_logo(context, provider, top + 25)
         _draw_usage_bar(context, remaining, top, colors)
         _draw_text(
             context,

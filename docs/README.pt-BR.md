@@ -1,14 +1,14 @@
 # Usage Limit
 
-**Acompanhe limites de IA, tarefas do Codex e worktrees do Git enquanto programa.**
+**Acompanhe limites de IA e tarefas do Codex enquanto programa.**
 
-Widget flutuante para Linux com suporte a **Codex, Antigravity e Claude Code**, feito com Python, GTK 3 e Cairo.
+Widget flutuante para Linux com suporte a **Codex e Antigravity** e **indicador opcional na barra do GNOME/Ubuntu**. Feito com Python, GTK 3 e Cairo.
 
 [English](../README.md) · [Uso e configuração (inglês)](usage.md) · [Como contribuir](../CONTRIBUTING.md) · [Versões](https://github.com/mehiel-victor/usage-limit/releases)
 
 <picture>
   <source media="(prefers-color-scheme: light)" srcset="../assets/preview-light.png">
-  <img alt="Usage Limit com limites de uso, status de tarefas do Codex, worktrees do Git e modo compacto" src="../assets/preview.png">
+  <img alt="Usage Limit com limites de uso, tarefas do Codex, modo compacto e indicadores do painel GNOME" src="../assets/preview.png">
 </picture>
 
 *Prévia renderizada pelo código Cairo do aplicativo com dados fictícios. A interface atual está em português.*
@@ -17,11 +17,11 @@ Widget flutuante para Linux com suporte a **Codex, Antigravity e Claude Code**, 
 
 - **Limites visíveis:** percentuais restantes e horários de renovação; alterne entre provedores e janelas disponíveis.
 - **Tarefas do Codex:** veja tarefas recentes, abra a fila de tarefas ativas e retorne à conversa no Codex Desktop.
-- **Worktrees do Git:** consulte branches à frente de uma referência local de main e alterações em arquivos rastreados, sem modificar repositórios.
-- **Modo compacto:** recolha o widget em três cápsulas de provedores na borda direita e clique para expandir.
-- **Controles de desktop:** fixação, passagem de cliques, redimensionamento, troca de monitor, tema claro/escuro automático e posição salva.
+- **Cotas na barra superior:** quatro grupos para Codex, Gemini, Claude/GPT compartilhado e Gemini 4 Argon, com dados do Codex e do Antigravity.
+- **Modo compacto:** recolha o widget em duas cápsulas de provedores na borda direita e clique para expandir.
+- **Controles e alertas:** fixação, passagem de cliques, redimensionamento, troca de monitor, posição salva, notificações de aprovação/saldo baixo e avisos opcionais no lockscreen.
 
-O widget não adiciona telemetria nem envia notificações de desktop ou tela bloqueada. Ele lê a saída das CLIs e dados locais de tarefas; as CLIs podem acessar os serviços dos respectivos provedores. Veja [acesso a dados e limitações](usage.md#data-access-and-limitations).
+O widget não adiciona telemetria. Ele lê a saída das CLIs e dados locais de tarefas; as CLIs podem acessar os serviços dos respectivos provedores. As cotas Claude/GPT e Argon vêm do Antigravity, sem login separado. A cota do Codex não representa os limites das conversas do ChatGPT. Veja [acesso a dados e limitações](usage.md#data-access-and-limitations).
 
 ## Instalação rápida
 
@@ -31,7 +31,7 @@ No Debian/Ubuntu, instale as dependências do sistema:
 
 ```bash
 sudo apt update
-sudo apt install git python3 python3-gi python3-gi-cairo python3-cairo gir1.2-gtk-3.0 librsvg2-common
+sudo apt install git python3 python3-gi python3-gi-cairo python3-cairo gir1.2-gtk-3.0 librsvg2-common libnotify-bin
 ```
 
 Clone e execute:
@@ -46,9 +46,21 @@ cd usage-limit
 | --- | --- |
 | Codex | Instale o Codex e faça login. O widget consulta os limites pelo app server local. |
 | Antigravity | Instale e autentique a CLI do Antigravity com saída estruturada de `/usage`. |
-| Claude Code | Configure a [ponte opcional de status line](usage.md#claude-code). |
 
-Um provedor indisponível não impede a leitura dos demais. Para abrir tarefas, é necessário o Codex Desktop com o protocolo `codex://` registrado. A visão de worktrees requer Git.
+Um provedor indisponível não impede a leitura do outro. Para abrir tarefas, é necessário o Codex Desktop com o protocolo `codex://` registrado. Abrir o widget novamente restaura e apresenta a instância existente.
+
+## Painel opcional no GNOME/Ubuntu
+
+Ative o suporte a Ubuntu AppIndicators na sessão de desktop e execute na pasta do clone:
+
+```bash
+sudo apt install gir1.2-ayatanaappindicator3-0.1
+./launch-usage-limit-panel --check
+python3 install_panel.py
+./launch-usage-limit-panel
+```
+
+O instalador cria um atalho e **inicia o indicador no próximo login**. Mantenha o clone no mesmo lugar. Veja [detalhes do painel e notificações](usage.md#gnomeubuntu-panel) para entender agrupamentos, cores e lockscreen.
 
 ## Adicionar ao menu de aplicativos
 
@@ -56,7 +68,7 @@ Um provedor indisponível não impede a leitura dos demais. Para abrir tarefas, 
 ./install.sh
 ```
 
-O script registra um atalho e um ícone para o usuário atual. O atalho aponta para esta pasta: mantenha o clone no mesmo lugar. O script não instala dependências nem inicia o widget automaticamente.
+O script registra o atalho e o ícone do widget flutuante para o usuário atual. O atalho aponta para esta pasta: mantenha o clone no mesmo lugar. O script não instala dependências nem ativa início automático do widget.
 
 Para atualizar, execute `git pull --ff-only` e reinicie o widget. Para remover o atalho e o ícone gerenciados:
 
@@ -64,7 +76,9 @@ Para atualizar, execute `git pull --ff-only` e reinicie o widget. Para remover o
 ./uninstall.sh
 ```
 
-Os scripts preservam arquivos gerenciados que foram modificados. A remoção não apaga o clone, a configuração dos provedores nem as preferências do widget.
+Encerre o painel por `Sair do indicador` antes de desinstalar. O desinstalador remove as entradas gerenciadas pelos dois instaladores e preserva arquivos modificados. A remoção não apaga o clone, a configuração dos provedores nem as preferências do widget.
+
+Atualizando da [v0.1.0](https://github.com/mehiel-victor/usage-limit/tree/v0.1.0)? Esta versão não inclui a visão Git nem a ponte direta do Claude Code por status line; a tag anterior permanece como registro histórico.
 
 ## Primeira contribuição
 
@@ -72,16 +86,18 @@ Relatos de problemas, testes de instalação, documentação, traduções e cód
 
 Algumas áreas úteis: instruções para outras distribuições, testes dos parsers com dados fictícios e compatibilidade entre desktops. Ao relatar um problema, informe a distribuição Linux e o tipo de sessão.
 
-Verificações básicas locais:
+Testes e verificações de sintaxe:
 
 ```bash
+python3 -m unittest discover -s . -p 'test_*.py' -v
 python3 -m compileall -q ./*.py
 sh -n install.sh
 sh -n uninstall.sh
 bash -n launch-usage-limit
+sh -n launch-usage-limit-panel
 ```
 
-Esses comandos verificam sintaxe; não substituem o teste no desktop nem as integrações com provedores. O fluxo completo está em [CONTRIBUTING.md](../CONTRIBUTING.md).
+A suíte cobre agrupamento/ícones do painel e ativação do widget. Não substitui testes no desktop nem das integrações com provedores. O fluxo completo está em [CONTRIBUTING.md](../CONTRIBUTING.md).
 
 Se a ferramenta for útil, deixe uma estrela para ajudar outras pessoas a encontrá-la. Compartilhar seu ambiente e contribuir com uma correção também ajuda o projeto.
 

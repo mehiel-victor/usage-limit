@@ -4,15 +4,16 @@
   [officially sourced Wikimedia file](https://commons.wikimedia.org/wiki/File:OpenAI_logo_2025_(symbol).svg).
 - `antigravity-icon.png` is the full-color icon from the
   [Google Antigravity press assets](https://antigravity.google/press?app=antigravity).
-- `claude-symbol.svg` is the Claude symbol from
-  [Anthropic's Claude mark source](https://commons.wikimedia.org/wiki/File:Claude_AI_symbol.svg).
+- `panel-openai.png`, `panel-antigravity.png`, `panel-claude.png` and
+  `panel-argon.png` are the PNG references supplied by the maintainer for the
+  GNOME panel. The OpenAI mark is rendered in a light foreground; other marks
+  retain their supplied colors.
 
-The marks are displayed unchanged and remain trademarks of their respective
-owners.
+The marks retain their shapes and remain trademarks of their respective owners.
 
 ## Documentation previews
 
 `preview.png` and `preview-light.png` use the application's actual Cairo
-rendering functions with fictitious usage, tasks, and worktrees. They are
+rendering functions with fictitious usage, tasks, and GNOME panel quotas. They are
 illustrations of the interface, not screenshots of live accounts or a running
 desktop session. The interface text is currently in Portuguese.

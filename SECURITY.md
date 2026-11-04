@@ -19,9 +19,13 @@ guarantee is offered.
 The widget invokes locally installed provider CLIs. Their authentication and
 network behavior remain under those tools' control; the widget has no telemetry
 or separate analytics service. Codex task status can read local thread metadata
-and rollout files. The Claude bridge saves rate-limit fields and a timestamp
-in the local state directory.
+and rollout files. The panel groups quotas returned by Codex and Antigravity;
+it does not read a separate Claude Code account.
 
-The Git view executes read-only commands against local repositories. It does
-not fetch, push, merge, or check out branches. Screenshots and debug logs may
-contain private task information or paths; review them before sharing.
+The widget can send desktop notifications for approvals and low limits. The
+optional lockscreen mode includes task titles and activity in resident
+notifications; visibility depends on the desktop's privacy settings. Keep it
+disabled if those details should not appear on the lockscreen. Screenshots and
+debug logs may contain private task information or paths; review them before
+sharing. The panel installer creates a user autostart entry only when explicitly
+run.

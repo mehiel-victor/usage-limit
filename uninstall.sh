@@ -4,7 +4,8 @@ set -eu
 data_home=${XDG_DATA_HOME:-"$HOME/.local/share"}
 state_file=$data_home/usage-limit/install-state.json
 legacy_state_file=$data_home/codex-token-window/install-state.json
-export STATE_FILE=$state_file LEGACY_STATE_FILE=$legacy_state_file
+panel_state_file=$data_home/usage-limit/panel-install-state.json
+export STATE_FILE=$state_file LEGACY_STATE_FILE=$legacy_state_file PANEL_STATE_FILE=$panel_state_file
 
 python3 - <<'PY'
 import hashlib
@@ -12,7 +13,7 @@ import json
 import os
 from pathlib import Path
 
-for state_file in (Path(os.environ["STATE_FILE"]), Path(os.environ["LEGACY_STATE_FILE"])):
+for state_file in (Path(os.environ["STATE_FILE"]), Path(os.environ["LEGACY_STATE_FILE"]), Path(os.environ["PANEL_STATE_FILE"])):
     try:
         state = json.loads(state_file.read_text(encoding="utf-8"))
     except (FileNotFoundError, json.JSONDecodeError):

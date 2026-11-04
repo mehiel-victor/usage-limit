@@ -74,7 +74,7 @@ class CollapsedWindowState:
         self.resize(COLLAPSED_WIDTH, COLLAPSED_HEIGHT)
         self.move(*docked)
         self.area.get_accessible().set_name(
-            "Limites recolhidos de Codex, Antigravity e Claude; pressione Enter para expandir"
+            "Limites recolhidos de Codex e Antigravity; pressione Enter para expandir"
         )
         self._apply_window_layer()
         GLib.idle_add(self._apply_input_region)

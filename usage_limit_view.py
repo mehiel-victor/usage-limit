@@ -8,8 +8,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Optional
 
-from model_branding import model_mark, paint_monochrome_mark, provider_mark
-from usage_sources import SUPPORTED_PROVIDERS
+from model_branding import model_mark
 
 try:
     import cairo
@@ -234,7 +233,7 @@ def _draw_model_watermark(context: Any, limit: Any, color: str) -> None:
 
 
 def control_at(x: float, y: float) -> Optional[str]:
-    if abs(x - PROVIDER_TOGGLE[0]) <= 36 and abs(y - PROVIDER_TOGGLE[1]) <= 11:
+    if abs(x - PROVIDER_TOGGLE[0]) <= 24 and abs(y - PROVIDER_TOGGLE[1]) <= 11:
         return "provider"
     for name, center in (
         ("passthrough", PASSTHROUGH_CONTROL),
@@ -436,17 +435,6 @@ def _draw_utility_controls(
     _draw_icon_control(context, "collapse", COLLAPSE_CONTROL, False, hovered == "collapse", colors)
 
 
-def _draw_provider_mark(
-    context: Any,
-    provider: str,
-    center_x: float,
-    center_y: float,
-    color: str,
-) -> None:
-    mark = provider_mark(provider)
-    paint_monochrome_mark(context, mark, center_x, center_y, color)
-
-
 def _draw_controls(
     context: Any,
     pinned: bool,
@@ -456,24 +444,28 @@ def _draw_controls(
     active_provider: Optional[str],
     available_providers: set[str],
 ) -> None:
-    if len(available_providers) < 2:
-        _draw_utility_controls(context, pinned, click_through, hovered, colors)
-        return
     toggle_x, toggle_y = PROVIDER_TOGGLE
     toggle_hovered = hovered == "provider" and len(available_providers) > 1
-    providers = [provider for provider in SUPPORTED_PROVIDERS if provider in available_providers]
-    toggle_width = len(providers) * 22
-    _rounded_rectangle(context, toggle_x - toggle_width / 2, toggle_y - 10, toggle_width, 20, 10)
+    _rounded_rectangle(context, toggle_x - 23, toggle_y - 10, 46, 20, 10)
     _set_color(context, colors.control_hover if toggle_hovered else colors.control)
     context.fill()
-    for index, provider in enumerate(providers):
-        left = toggle_x - toggle_width / 2 + index * 22
+    for index, provider in enumerate(("Codex", "Antigravity")):
+        left = toggle_x - 22 + index * 22
         active, enabled = provider == active_provider, provider in available_providers
         if active and enabled:
             _rounded_rectangle(context, left, toggle_y - 9, 22, 18, 8)
             _set_color(context, colors.control_active)
             context.fill()
-        _draw_provider_mark(context, provider, left + 11, toggle_y, colors.primary)
+        color = colors.primary if active and enabled else colors.icon if enabled else colors.tertiary
+        _draw_text(
+            context,
+            "C" if index == 0 else "A",
+            toggle_y,
+            "Sans Bold 8",
+            color,
+            background_color=colors.background,
+            center_x=left + 11,
+        )
     _draw_utility_controls(context, pinned, click_through, hovered, colors)
 
 

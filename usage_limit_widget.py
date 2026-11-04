@@ -3,7 +3,6 @@
 
 from __future__ import annotations
 
-import fcntl
 import json
 import os
 import subprocess
@@ -22,19 +21,17 @@ from collapsed_usage_view import (
     right_edge_position,
 )
 from collapsed_window_state import CollapsedWindowState
-from provider_selection_state import ProviderSelectionState
-from usage_sources import (
-    SUPPORTED_PROVIDERS,
-    UsageLimit,
-    configured_profiles,
-    read_antigravity_limits,
-    read_claude_limits,
-    read_codex_limits,
-)
+from usage_sources import UsageLimit, configured_profiles, notify, read_antigravity_limits, read_codex_limits
 from task_sources import CodexTaskSource, MonitoredTask, open_codex_task
 from task_status_view import (
-    ATTENTION_BUTTON_CENTER, attention_button_at, draw_mode_toggle, draw_task_status,
-    draw_worktree_status, mode_at, segment_at, task_tooltip, visible_tasks,
+    ATTENTION_BUTTON_CENTER,
+    attention_button_at,
+    draw_mode_toggle,
+    draw_task_status,
+    mode_at,
+    segment_at,
+    task_tooltip,
+    visible_tasks,
 )
 from usage_limit_view import (
     COLLAPSE_CONTROL,
@@ -58,9 +55,9 @@ from usage_limit_view import (
     widget_height,
 )
 from widget_support import (
-    log_debug, task_visual_signature,
+    approval_task_transitions, format_lockscreen_status, log_debug,
+    notify_lockscreen, publish_approval_notifications, task_visual_signature, unread_task_transitions,
 )
-from worktree_sources import WorktreeSnapshot, read_worktrees, worktree_paths
 
 PROVIDER_ERRORS = (OSError, ValueError, TimeoutError, json.JSONDecodeError, RuntimeError, subprocess.SubprocessError)
 
@@ -79,14 +76,13 @@ except (ImportError, ValueError):
     Gdk = Gio = GLib = Gtk = None  # type: ignore[assignment]
 
 POSITION_FILE = Path(os.environ.get("XDG_STATE_HOME", str(Path.home() / ".local" / "state"))) / "usage-limit" / "position.json"
+LOCKSCREEN_FILE = Path(os.environ.get("XDG_STATE_HOME", str(Path.home() / ".local" / "state"))) / "usage-limit" / "lockscreen.json"
 LEGACY_POSITION_FILE = Path.home() / ".codex" / "token_widget_position.json"
-RUNTIME_ROOT = os.environ.get("XDG_RUNTIME_DIR") or os.environ.get("XDG_CACHE_HOME", str(Path.home() / ".cache"))
-LOCK_FILE = Path(RUNTIME_ROOT) / "usage-limit" / "widget.lock"
 REFRESH_MS = 5 * 60_000
 TASK_REFRESH_MS = 3_000
 
 
-class UsageLimitWidget(CollapsedWindowState, ProviderSelectionState, Gtk.Window if Gtk is not None else object):
+class UsageLimitWidget(CollapsedWindowState, Gtk.Window if Gtk is not None else object):
     def __init__(self, application: Any = None):
         super().__init__(type=Gtk.WindowType.TOPLEVEL)
         if application is not None:
@@ -120,11 +116,15 @@ class UsageLimitWidget(CollapsedWindowState, ProviderSelectionState, Gtk.Window 
         self._task_source = CodexTaskSource(self._profiles[0]["home"])
         self._view_mode = "usage"
         self._tasks: list[MonitoredTask] = []
-        self._worktrees: list[WorktreeSnapshot] = []
         self._task_error = False
         self._task_refreshing = False
         self._selected_task = 0
         self._attention_window: Optional[Any] = None
+        self._lockscreen_enabled = self._load_lockscreen_preference()
+        self._known_task_statuses: dict[str, str] = {}
+        self._known_approval_task_ids: set[str] = set()
+        self._task_statuses_initialized = False
+        self._lockscreen_notification_id = 0
 
         self.set_title("Usage Limit")
         self.set_icon_name("usage-limit")
@@ -176,9 +176,8 @@ class UsageLimitWidget(CollapsedWindowState, ProviderSelectionState, Gtk.Window 
     def _render_limits(self, limits: list[UsageLimit]) -> None:
         self._all_limits = limits
         providers = {limit.provider for limit in limits}
-        self._provider_menu_item.set_visible(len(providers) >= 2)
         if self._active_provider not in providers:
-            self._active_provider = next((provider for provider in SUPPORTED_PROVIDERS if provider in providers), None)
+            self._active_provider = next((provider for provider in ("Codex", "Antigravity") if provider in providers), None)
         self._limits = [limit for limit in limits if limit.provider == self._active_provider]
         self._selected_limit = max(0, min(self._selected_limit, len(self._limits) - 1))
         self._error = False
@@ -215,14 +214,6 @@ class UsageLimitWidget(CollapsedWindowState, ProviderSelectionState, Gtk.Window 
                 self._critical_phase and self._has_critical_limit(),
             )
             draw_mode_toggle(context, self._view_mode, self._hovered_control, self._dark_mode)
-        elif self._view_mode == "worktrees":
-            draw_worktree_status(
-                context,
-                self._worktrees,
-                self._hovered_control,
-                self._task_error,
-                self._dark_mode,
-            )
         else:
             draw_task_status(
                 context,
@@ -332,8 +323,6 @@ class UsageLimitWidget(CollapsedWindowState, ProviderSelectionState, Gtk.Window 
             return True
         selected_mode = mode_at(base_x, base_y)
         self._press_target = f"mode:{selected_mode}" if selected_mode else control_at(base_x, base_y)
-        if self._press_target == "provider" and len({limit.provider for limit in self._all_limits}) < 2:
-            self._press_target = None
         if self._view_mode != "usage" and self._press_target == "provider":
             self._press_target = None
         shown_tasks = visible_tasks(self._tasks, self._view_mode)
@@ -353,18 +342,17 @@ class UsageLimitWidget(CollapsedWindowState, ProviderSelectionState, Gtk.Window 
         refresh = Gtk.MenuItem.new_with_label("Atualizar agora")
         refresh.connect("activate", lambda _item: self.refresh())
         menu.append(refresh)
-        self._provider_menu_item = Gtk.MenuItem.new_with_label("Alternar provedor (Codex / Antigravity / Claude)")
-        self._provider_menu_item.set_no_show_all(True)
-        self._provider_menu_item.set_visible(False)
-        self._provider_menu_item.connect("activate", lambda _item: self._toggle_provider())
-        menu.append(self._provider_menu_item)
-        git_view = Gtk.MenuItem.new_with_label("Mostrar worktrees e status do Git")
-        git_view.connect("activate", lambda _item: self._set_view_mode("worktrees"))
-        menu.append(git_view)
+        toggle_prov = Gtk.MenuItem.new_with_label("Alternar provedor (Codex / Antigravity)")
+        toggle_prov.connect("activate", lambda _item: self._toggle_provider())
+        menu.append(toggle_prov)
         if len(self._profiles) > 1:
             account = Gtk.MenuItem.new_with_label("Alternar conta do Codex")
             account.connect("activate", lambda _item: self._next_account())
             menu.append(account)
+        lockscreen = Gtk.CheckMenuItem.new_with_label("Exibir no lockscreen")
+        lockscreen.set_active(self._lockscreen_enabled)
+        lockscreen.connect("toggled", self._toggle_lockscreen)
+        menu.append(lockscreen)
         move_monitor = Gtk.MenuItem.new_with_label("Mover para outro monitor")
         move_monitor.set_sensitive(len(self._monitor_workareas()) > 1)
         move_monitor.connect("activate", lambda _item: self._move_to_next_monitor())
@@ -383,11 +371,40 @@ class UsageLimitWidget(CollapsedWindowState, ProviderSelectionState, Gtk.Window 
         menu.show_all()
         return menu
 
+    def _load_lockscreen_preference(self) -> bool:
+        try:
+            value = json.loads(LOCKSCREEN_FILE.read_text(encoding="utf-8"))
+            return bool(value.get("enabled")) if isinstance(value, dict) else False
+        except (OSError, ValueError):
+            return False
+
+    def _toggle_lockscreen(self, item: Any) -> None:
+        self._lockscreen_enabled = bool(item.get_active())
+        try:
+            LOCKSCREEN_FILE.parent.mkdir(parents=True, exist_ok=True)
+            LOCKSCREEN_FILE.write_text(
+                json.dumps({"enabled": self._lockscreen_enabled}) + "\n",
+                encoding="utf-8",
+            )
+        except OSError:
+            return
+
+    def _publish_lockscreen(self, unread_tasks: list[MonitoredTask]) -> None:
+        if not self._lockscreen_enabled or not unread_tasks:
+            return
+        self._lockscreen_notification_id = notify_lockscreen(
+            format_lockscreen_status(self._all_limits, unread_tasks),
+            self._lockscreen_notification_id,
+        )
+
     def _next_account(self) -> None:
         self._profile_index = (self._profile_index + 1) % len(self._profiles)
         self._task_source.close()
         self._task_source = CodexTaskSource(self._profiles[self._profile_index]["home"])
         self._task_refreshing = False
+        self._known_task_statuses = {}
+        self._known_approval_task_ids = set()
+        self._task_statuses_initialized = False
         self._all_limits = []
         self._limits = []
         self._error = False
@@ -425,8 +442,6 @@ class UsageLimitWidget(CollapsedWindowState, ProviderSelectionState, Gtk.Window 
             base_x, base_y = self._base_point(event.x, event.y)
             selected_mode = mode_at(base_x, base_y)
             hovered = f"mode:{selected_mode}" if selected_mode else control_at(base_x, base_y)
-            if hovered == "provider" and len({limit.provider for limit in self._all_limits}) < 2:
-                hovered = None
             if self._view_mode != "usage" and hovered == "provider":
                 hovered = None
             if self._view_mode != "usage" and hovered is None:
@@ -502,8 +517,6 @@ class UsageLimitWidget(CollapsedWindowState, ProviderSelectionState, Gtk.Window 
             return True
         selected_mode = mode_at(base_x, base_y)
         target = f"mode:{selected_mode}" if selected_mode else control_at(base_x, base_y)
-        if target == "provider" and len({limit.provider for limit in self._all_limits}) < 2:
-            target = None
         if self._view_mode != "usage" and target == "provider":
             target = None
         over_attention = self._view_mode != "usage" and attention_button_at(base_x, base_y)
@@ -531,8 +544,7 @@ class UsageLimitWidget(CollapsedWindowState, ProviderSelectionState, Gtk.Window 
                         "Provedores indisponíveis" if self._error else "Carregando provedores"
                     )
             else:
-                available = [provider for provider in SUPPORTED_PROVIDERS if provider in providers]
-                next_provider = available[(available.index(self._active_provider) + 1) % len(available)]
+                next_provider = "Antigravity" if self._active_provider == "Codex" else "Codex"
                 tooltip.set_text(f"Mostrar limites do {next_provider}")
         elif target == "pin":
             tooltip.set_text("Desfixar da tela" if self._pinned else "Fixar na tela")
@@ -547,7 +559,7 @@ class UsageLimitWidget(CollapsedWindowState, ProviderSelectionState, Gtk.Window 
         return True
 
     def _set_view_mode(self, mode: str) -> None:
-        if mode not in {"usage", "overview", "attention", "worktrees"} or mode == self._view_mode:
+        if mode not in {"usage", "overview", "attention"} or mode == self._view_mode:
             return
         self._view_mode = mode
         self._selected_task = 0
@@ -577,6 +589,17 @@ class UsageLimitWidget(CollapsedWindowState, ProviderSelectionState, Gtk.Window 
 
     def _on_attention_window_destroyed(self, _window: Any) -> None:
         self._attention_window = None
+
+    def _toggle_provider(self) -> None:
+        providers = {limit.provider for limit in self._all_limits}
+        log_debug(f"Toggle provider: all_limits={[(l.provider, l.name) for l in self._all_limits]}, providers={providers}")
+        if len(providers) < 2:
+            return
+        self._active_provider = "Antigravity" if self._active_provider == "Codex" else "Codex"
+        self._limits = [limit for limit in self._all_limits if limit.provider == self._active_provider]
+        self._selected_limit = min(self._selected_limit, max(0, len(self._limits) - 1))
+        log_debug(f"Switched provider to: {self._active_provider}, new limits length: {len(self._limits)}")
+        self.area.queue_draw()
 
     def _update_cursor(self) -> None:
         window = self.area.get_window()
@@ -738,15 +761,14 @@ class UsageLimitWidget(CollapsedWindowState, ProviderSelectionState, Gtk.Window 
             )
         )
         if self._view_mode == "usage":
-            if len({limit.provider for limit in self._all_limits}) >= 2:
-                provider_region = control_region(
-                    PROVIDER_TOGGLE,
-                    allocation.width,
-                    allocation.height,
-                    36,
-                    11,
-                )
-                region.union(cairo.Region(provider_region))
+            provider_region = control_region(
+                PROVIDER_TOGGLE,
+                allocation.width,
+                allocation.height,
+                24,
+                11,
+            )
+            region.union(cairo.Region(provider_region))
         else:
             attention_region = control_region(
                 ATTENTION_BUTTON_CENTER,
@@ -764,7 +786,7 @@ class UsageLimitWidget(CollapsedWindowState, ProviderSelectionState, Gtk.Window 
         try:
             position = json.loads(position_file.read_text(encoding="utf-8"))
             saved_mode = position.get("view_mode", "usage")
-            self._view_mode = saved_mode if saved_mode in {"usage", "overview", "attention", "worktrees"} else "usage"
+            self._view_mode = saved_mode if saved_mode in {"usage", "overview", "attention"} else "usage"
             self._widget_size = clamp_widget_size(position.get("size", WIDGET_SIZE), self._view_mode, self._monitor_workareas(), (int(position["x"]), int(position["y"])))
             self._pinned = bool(position.get("pinned", True))
             self._click_through = bool(position.get("click_through", False))
@@ -818,7 +840,7 @@ class UsageLimitWidget(CollapsedWindowState, ProviderSelectionState, Gtk.Window 
 
     def _load_limits(self, home: str, generation: int) -> None:
         try:
-            results: list[Optional[list[UsageLimit]]] = [None] * len(SUPPORTED_PROVIDERS)
+            results: list[Optional[list[UsageLimit]]] = [None, None]
             workers = [
                 threading.Thread(
                     target=self._collect_source,
@@ -828,11 +850,6 @@ class UsageLimitWidget(CollapsedWindowState, ProviderSelectionState, Gtk.Window 
                 threading.Thread(
                     target=self._collect_source,
                     args=(read_antigravity_limits, results, 1),
-                    daemon=True,
-                ),
-                threading.Thread(
-                    target=self._collect_source,
-                    args=(read_claude_limits, results, 2),
                     daemon=True,
                 ),
             ]
@@ -876,7 +893,6 @@ class UsageLimitWidget(CollapsedWindowState, ProviderSelectionState, Gtk.Window 
             self._all_limits = []
             self._limits = []
             self._active_provider = None
-            self._provider_menu_item.set_visible(False)
             self._selected_limit = 0
             self._critical_phase = False
             self.area.queue_draw()
@@ -910,19 +926,26 @@ class UsageLimitWidget(CollapsedWindowState, ProviderSelectionState, Gtk.Window 
             return False
         self._task_refreshing = False
         previous_signature = task_visual_signature(self._tasks)
-        previous_worktrees = self._worktrees
         changed = error != self._task_error
         self._task_error = error
         if not error:
+            unread_tasks = unread_task_transitions(self._known_task_statuses, tasks)
+            approval_tasks, approval_task_ids = approval_task_transitions(
+                self._known_approval_task_ids,
+                tasks,
+            )
+            self._known_task_statuses.update({task.id: task.status for task in tasks})
+            self._known_approval_task_ids = approval_task_ids
             self._tasks = tasks
+            publish_approval_notifications(approval_tasks)
+            if self._task_statuses_initialized:
+                self._publish_lockscreen(unread_tasks)
+            self._task_statuses_initialized = True
             changed = changed or previous_signature != task_visual_signature(tasks)
-            self._worktrees = read_worktrees(worktree_paths(tasks))
-            changed = changed or previous_worktrees != self._worktrees
             shown = visible_tasks(tasks, self._view_mode)
             self._selected_task = min(self._selected_task, max(0, len(shown) - 1))
         else:
             self._tasks = []
-            self._worktrees = []
             self._selected_task = 0
         if self._view_mode != "usage" and changed:
             self.area.queue_draw()
@@ -943,15 +966,24 @@ class UsageLimitWidget(CollapsedWindowState, ProviderSelectionState, Gtk.Window 
         self.destroy()
 
 
+def activate_widget(application: Any) -> None:
+    windows = application.get_windows()
+    widget = windows[0] if windows else UsageLimitWidget(application)
+    if widget._collapsed:
+        widget._expand_from_provider(widget._active_provider or "Codex")
+    widget.show_all()
+    widget.deiconify()
+    widget._ensure_visible()
+    widget.present()
+
+
 def main() -> None:
     if Gtk is None or Gio is None or cairo is None:
-        raise SystemExit("GTK is unavailable; install python3-gi and gir1.2-gtk-3.0.")
-    LOCK_FILE.parent.mkdir(parents=True, exist_ok=True)
-    instance_lock = LOCK_FILE.open("w")
+        raise SystemExit("GTK indisponível; instale python3-gi, python3-cairo, python3-gi-cairo e gir1.2-gtk-3.0.")
     try:
-        fcntl.flock(instance_lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-    except BlockingIOError:
-        return
+        gi.require_foreign("cairo")
+    except ImportError as error:
+        raise SystemExit("Integração de desenho GTK/Cairo indisponível; instale python3-gi-cairo e abra novamente.") from error
     GLib.set_prgname("usage-limit")
     Gdk.set_program_class("usage-limit")
     Gtk.Window.set_default_icon_name("usage-limit")
@@ -960,13 +992,8 @@ def main() -> None:
         flags=Gio.ApplicationFlags.FLAGS_NONE,
     )
 
-    def activate(app: Any) -> None:
-        windows = app.get_windows()
-        widget = windows[0] if windows else UsageLimitWidget(app)
-        widget.show_all()
-        widget.present()
-
-    application.connect("activate", activate)
+    # Gtk.Application forwards subsequent launches to this existing instance.
+    application.connect("activate", activate_widget)
     application.run(None)
 
 

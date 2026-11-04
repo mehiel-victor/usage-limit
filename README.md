@@ -1,8 +1,8 @@
 # Usage Limit
 
-**Keep AI usage limits, Codex tasks, and Git worktrees in view while you code.**
+**Keep AI usage limits and Codex tasks in view while you code.**
 
-A floating Linux desktop widget for **Codex, Antigravity, and Claude Code**, built with Python, GTK 3, and Cairo.
+A floating Linux desktop widget for **Codex and Antigravity**, with an optional **GNOME/Ubuntu top-bar indicator**. Built with Python, GTK 3, and Cairo.
 
 [![Checks](https://github.com/mehiel-victor/usage-limit/actions/workflows/checks.yml/badge.svg)](https://github.com/mehiel-victor/usage-limit/actions/workflows/checks.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
@@ -12,7 +12,7 @@ A floating Linux desktop widget for **Codex, Antigravity, and Claude Code**, bui
 
 <picture>
   <source media="(prefers-color-scheme: light)" srcset="assets/preview-light.png">
-  <img alt="Usage Limit showing provider usage, Codex task status, Git worktrees, and the compact provider dock" src="assets/preview.png">
+  <img alt="Usage Limit showing provider usage, Codex task status, the compact dock, and GNOME panel badges" src="assets/preview.png">
 </picture>
 
 *Preview rendered by the app's Cairo drawing code with sample data. The current interface is in Portuguese.*
@@ -21,11 +21,11 @@ A floating Linux desktop widget for **Codex, Antigravity, and Claude Code**, bui
 
 - **Usage at a glance:** remaining percentages and reset times from supported providers; cycle through available windows and providers.
 - **Codex task status:** recent tasks, an active task queue, and direct links back to Codex Desktop.
-- **Git worktree overview:** branches ahead of a locally cached main reference and tracked files with uncommitted changes, without changing your repositories.
-- **A compact edge dock:** collapse into three provider capsules, then click a capsule to expand.
-- **Desktop controls:** pinning, click-through, resize, monitor switching, automatic light/dark theme, and saved position.
+- **GNOME top-bar quotas:** four groups for Codex, Gemini, shared Claude/GPT, and Gemini 4 Argon, using Codex and Antigravity data.
+- **A compact edge dock:** collapse into two provider capsules, then click a capsule to expand.
+- **Desktop controls and alerts:** pinning, click-through, resize, monitor switching, saved position, approval/low-limit notifications, and opt-in lockscreen task notices.
 
-The widget adds no telemetry and sends no desktop or lockscreen notifications. It reads provider CLI output and local task data; provider CLIs may contact their own services. See [data access and limitations](docs/usage.md#data-access-and-limitations).
+The widget adds no telemetry. It reads provider CLI output and local task data; provider CLIs may contact their own services. Claude/GPT and Argon quotas come from Antigravity, without separate logins. Codex quotas do not represent ChatGPT conversation limits. See [data access and limitations](docs/usage.md#data-access-and-limitations).
 
 ## Quick start
 
@@ -35,7 +35,7 @@ On Debian/Ubuntu, install the system dependencies:
 
 ```bash
 sudo apt update
-sudo apt install git python3 python3-gi python3-gi-cairo python3-cairo gir1.2-gtk-3.0 librsvg2-common
+sudo apt install git python3 python3-gi python3-gi-cairo python3-cairo gir1.2-gtk-3.0 librsvg2-common libnotify-bin
 ```
 
 Then clone and launch:
@@ -50,9 +50,21 @@ cd usage-limit
 | --- | --- |
 | Codex | Install Codex and sign in. The widget reads usage through its local app server. |
 | Antigravity | Install and sign in to the Antigravity CLI with structured `/usage` output. |
-| Claude Code | Configure the optional [status-line bridge](docs/usage.md#claude-code). |
 
-Missing providers stay unavailable; another working provider can still supply usage data. Codex task links require Codex Desktop and its `codex://` URL handler. Git worktree status requires Git.
+Another working provider can still supply usage data when one fails. Codex task links require Codex Desktop and its `codex://` URL handler. Reopening the widget restores and presents its existing instance.
+
+## Optional GNOME/Ubuntu panel
+
+Enable Ubuntu AppIndicators support in your desktop session, then run from the checkout:
+
+```bash
+sudo apt install gir1.2-ayatanaappindicator3-0.1
+./launch-usage-limit-panel --check
+python3 install_panel.py
+./launch-usage-limit-panel
+```
+
+The panel installer adds an application shortcut and **starts the indicator at login**. Keep this checkout in place. [Panel details and notifications](docs/usage.md#gnomeubuntu-panel) explain grouping, status colors, and lockscreen behavior.
 
 ## Add it to your app launcher
 
@@ -60,7 +72,7 @@ Missing providers stay unavailable; another working provider can still supply us
 ./install.sh
 ```
 
-This registers a desktop entry and icon for the current user. It points to this checkout, so keep the folder in place. It does not install dependencies or start the widget automatically.
+This registers the floating widget's desktop entry and icon for the current user. It points to this checkout, so keep the folder in place. It does not install dependencies or enable widget autostart.
 
 Update with `git pull --ff-only`, then restart the widget. Remove the managed launcher and icon with:
 
@@ -68,7 +80,9 @@ Update with `git pull --ff-only`, then restart the widget. Remove the managed la
 ./uninstall.sh
 ```
 
-The scripts preserve modified managed files. Uninstalling does not delete your checkout, provider configuration, or widget preferences.
+Quit the panel through `Sair do indicador` before uninstalling. The uninstaller removes both installers' managed entries, preserving modified files. It does not delete your checkout, provider configuration, or widget preferences.
+
+Upgrading from [v0.1.0](https://github.com/mehiel-victor/usage-limit/tree/v0.1.0)? This version no longer includes the Git view or direct Claude Code status-line bridge; that tag remains a historical snapshot.
 
 ## Make your first contribution
 
@@ -76,16 +90,18 @@ Bug reports, installation feedback, documentation, translations, and code are we
 
 Useful areas include distro setup guides, parser tests using sanitized fixtures, and broader desktop compatibility. Please describe your Linux distribution and desktop session when reporting a problem.
 
-To run the basic local checks:
+To run tests and basic syntax checks:
 
 ```bash
+python3 -m unittest discover -s . -p 'test_*.py' -v
 python3 -m compileall -q ./*.py
 sh -n install.sh
 sh -n uninstall.sh
 bash -n launch-usage-limit
+sh -n launch-usage-limit-panel
 ```
 
-These check syntax; they do not replace a desktop smoke test or provider integration testing. See [CONTRIBUTING.md](CONTRIBUTING.md) for the full validation workflow.
+The suite covers panel grouping/icons and widget activation. It does not replace desktop smoke tests or provider integration testing. See [CONTRIBUTING.md](CONTRIBUTING.md) for the full validation workflow.
 
 If Usage Limit is useful to you, a star helps others discover it. Sharing your setup and contributing a fix helps the project grow.
 

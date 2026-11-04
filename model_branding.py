@@ -9,11 +9,10 @@ from typing import Any, Optional
 try:
     import gi
 
-    gi.require_version("Gdk", "3.0")
     gi.require_version("GdkPixbuf", "2.0")
-    from gi.repository import Gdk, GdkPixbuf, GLib
+    from gi.repository import GdkPixbuf, GLib
 except (ImportError, ValueError):
-    Gdk = GdkPixbuf = GLib = None  # type: ignore[assignment]
+    GdkPixbuf = GLib = None  # type: ignore[assignment]
 
 ASSET_ROOT = Path(__file__).with_name("assets")
 
@@ -32,14 +31,7 @@ def _load_mark(filename: str, size: int) -> Any:
 MODEL_MARKS = {
     "openai": _load_mark("openai-symbol.svg", 150),
     "antigravity": _load_mark("antigravity-icon.png", 150),
-    "claude": _load_mark("claude-symbol.svg", 150),
 }
-PROVIDER_FILES = {
-    "Codex": "openai-symbol.svg",
-    "Antigravity": "antigravity-icon.png",
-    "Claude": "claude-symbol.svg",
-}
-PROVIDER_MARKS: dict[tuple[str, int], Any] = {}
 
 
 def model_mark(model_name: str, provider: str) -> Optional[Any]:
@@ -47,46 +39,6 @@ def model_mark(model_name: str, provider: str) -> Optional[Any]:
     normalized = model_name.lower()
     if "gpt" in normalized or "codex" in normalized:
         return MODEL_MARKS.get("openai")
-    if "claude" in normalized or provider == "Claude":
-        return MODEL_MARKS.get("claude")
     if provider == "Antigravity":
         return MODEL_MARKS.get("antigravity")
     return None
-
-
-def provider_mark(provider: str, size: int = 14) -> Optional[Any]:
-    """Load a small provider mark for compact controls."""
-    filename = PROVIDER_FILES.get(provider)
-    if filename is None:
-        return None
-    key = provider, size
-    if key not in PROVIDER_MARKS:
-        PROVIDER_MARKS[key] = _load_mark(filename, size)
-    return PROVIDER_MARKS[key]
-
-
-def paint_monochrome_mark(
-    context: Any,
-    mark: Any,
-    center_x: float,
-    center_y: float,
-    color: str,
-) -> bool:
-    """Paint a provider mark using its alpha only, with no background plate."""
-    if mark is None or Gdk is None:
-        return False
-    Gdk.cairo_set_source_pixbuf(
-        context,
-        mark,
-        center_x - mark.get_width() / 2,
-        center_y - mark.get_height() / 2,
-    )
-    mask = context.get_source()
-    context.set_source_rgba(
-        int(color[1:3], 16) / 255,
-        int(color[3:5], 16) / 255,
-        int(color[5:7], 16) / 255,
-        1.0,
-    )
-    context.mask(mask)
-    return True
