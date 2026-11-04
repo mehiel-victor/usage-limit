@@ -2,7 +2,7 @@
 
 **Acompanhe limites de IA e tarefas do Codex enquanto programa.**
 
-Widget flutuante para Linux com suporte a **Codex e Antigravity** e **indicador opcional na barra do GNOME/Ubuntu**. Feito com Python, GTK 3 e Cairo.
+Widget flutuante para Linux com suporte a **Codex, Antigravity e Claude Code** e **indicador opcional na barra do GNOME/Ubuntu**. Feito com Python, GTK 3 e Cairo.
 
 [English](../README.md) · [Uso e configuração (inglês)](usage.md) · [Como contribuir](../CONTRIBUTING.md) · [Versões](https://github.com/mehiel-victor/usage-limit/releases)
 
@@ -17,8 +17,8 @@ Widget flutuante para Linux com suporte a **Codex e Antigravity** e **indicador 
 
 - **Limites visíveis:** percentuais restantes e horários de renovação; alterne entre provedores e janelas disponíveis.
 - **Tarefas do Codex:** veja tarefas recentes, abra a fila de tarefas ativas e retorne à conversa no Codex Desktop.
-- **Cotas na barra superior:** quatro grupos para Codex, Gemini, Claude/GPT compartilhado e Gemini 4 Argon, com dados do Codex e do Antigravity.
-- **Modo compacto:** recolha o widget em duas cápsulas de provedores na borda direita e clique para expandir.
+- **Cotas na barra superior:** cinco grupos separados para Codex, Gemini, Claude/GPT do Antigravity, Gemini 4 Argon e uso direto do Claude Code.
+- **Modo compacto:** recolha o widget em três cápsulas de provedores na borda direita e clique para expandir.
 - **Controles e alertas:** fixação, passagem de cliques, redimensionamento, troca de monitor, posição salva, notificações de aprovação/saldo baixo e avisos opcionais no lockscreen.
 
 O widget não adiciona telemetria. Ele lê a saída das CLIs e dados locais de tarefas; as CLIs podem acessar os serviços dos respectivos provedores. As cotas Claude/GPT e Argon vêm do Antigravity, sem login separado. A cota do Codex não representa os limites das conversas do ChatGPT. Veja [acesso a dados e limitações](usage.md#data-access-and-limitations).
@@ -46,8 +46,11 @@ cd usage-limit
 | --- | --- |
 | Codex | Instale o Codex e faça login. O widget consulta os limites pelo app server local. |
 | Antigravity | Instale e autentique a CLI do Antigravity com saída estruturada de `/usage`. |
+| Claude Code | Configure a [ponte local de status line](usage.md#claude-code), opcional e dependente de uma conta elegível. |
 
-Um provedor indisponível não impede a leitura do outro. Para abrir tarefas, é necessário o Codex Desktop com o protocolo `codex://` registrado. Abrir o widget novamente restaura e apresenta a instância existente.
+Um provedor indisponível não impede a leitura dos demais. Para abrir tarefas, é necessário o Codex Desktop com o protocolo `codex://` registrado. Abrir o widget novamente restaura e apresenta a instância existente.
+
+O suporte ao Claude Code foi testado com dados fictícios; uma sessão autenticada real ainda não foi validada. Cotas ausentes, antigas ou já renovadas permanecem indisponíveis.
 
 ## Painel opcional no GNOME/Ubuntu
 
@@ -78,7 +81,7 @@ Para atualizar, execute `git pull --ff-only` e reinicie o widget. Para remover o
 
 Encerre o painel por `Sair do indicador` antes de desinstalar. O desinstalador remove as entradas gerenciadas pelos dois instaladores e preserva arquivos modificados. A remoção não apaga o clone, a configuração dos provedores nem as preferências do widget.
 
-Atualizando da [v0.1.0](https://github.com/mehiel-victor/usage-limit/tree/v0.1.0)? Esta versão não inclui a visão Git nem a ponte direta do Claude Code por status line; a tag anterior permanece como registro histórico.
+Atualizando da [v0.1.0](https://github.com/mehiel-victor/usage-limit/tree/v0.1.0)? A visão Git não está incluída. A ponte do Claude Code agora normaliza campos de cota e descarta snapshots antigos; o uso direto do Claude Code fica separado do grupo Claude/GPT do Antigravity.
 
 ## Primeira contribuição
 
@@ -97,7 +100,7 @@ bash -n launch-usage-limit
 sh -n launch-usage-limit-panel
 ```
 
-A suíte cobre agrupamento/ícones do painel e ativação do widget. Não substitui testes no desktop nem das integrações com provedores. O fluxo completo está em [CONTRIBUTING.md](../CONTRIBUTING.md).
+A suíte cobre agrupamento/ícones do painel, ativação do widget e o fluxo da ponte Claude até widget/painel com dados fictícios. Não substitui testes no desktop nem com provedores autenticados. O fluxo completo está em [CONTRIBUTING.md](../CONTRIBUTING.md).
 
 Se a ferramenta for útil, deixe uma estrela para ajudar outras pessoas a encontrá-la. Compartilhar seu ambiente e contribuir com uma correção também ajuda o projeto.
 

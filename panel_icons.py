@@ -12,7 +12,7 @@ from usage_limit_view import usage_color
 
 ASSETS = Path(__file__).resolve().parent / "assets"
 MARKS = {"codex": "panel-openai.png", "gemini": "panel-antigravity.png",
-         "claude": "panel-claude.png", "argon": "panel-argon.png"}
+         "claude": "panel-claude.png", "argon": "panel-argon.png", "claude-code": "panel-claude.png"}
 CACHE = Path(os.environ.get("XDG_CACHE_HOME", str(Path.home() / ".cache"))) / "usage-limit/panel-status-v1"
 
 

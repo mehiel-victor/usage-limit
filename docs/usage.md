@@ -4,7 +4,7 @@
 
 ## Providers
 
-Install and authenticate Codex, Antigravity, or both before launching. The widget refreshes usage every five minutes; right-click and choose `Atualizar agora` to refresh manually. Click the donut to cycle through usage windows. The `C | A` control and context menu switch between Codex and Antigravity.
+Configure at least one provider before launching: Codex, Antigravity, or the Claude Code bridge below. The widget refreshes usage every five minutes; right-click and choose `Atualizar agora` to refresh manually. Click the donut to cycle through usage windows. The provider controls and context menu switch between available providers.
 
 ### Codex
 
@@ -16,7 +16,28 @@ The quota belongs to the authenticated Codex account. It is not a measure of rem
 
 The integration expects Antigravity CLI 1.1.8 or newer with structured usage output. It invokes `agy -p /usage --output-format json --print-timeout 30s`, with a 35-second process timeout. It looks for `~/.local/bin/agy`, then `PATH`. Sign in through the CLI; the widget does not read its credential or provider configuration files directly.
 
-Gemini, Claude/GPT, and Argon quotas in the panel come from Antigravity's response. There is no direct Claude Code status-line bridge or separate Claude/GPT login in this version.
+Gemini, Claude/GPT, and Argon quotas in the panel come from Antigravity's response, without separate model logins. The Claude/GPT group is independent of direct Claude Code usage.
+
+### Claude Code
+
+The optional bridge uses Claude Code's [official status-line contract](https://code.claude.com/docs/en/statusline): JSON arrives on stdin, and quota windows live in `rate_limits`, separate from context-window usage. Quotas appear only for eligible claude.ai subscription or gateway sessions, after an API response. Five-hour and seven-day windows are independent; gateways can also supply a spend limit.
+
+Merge this into `~/.claude/settings.json`, replacing the absolute path. It replaces an existing status-line command; adapt or preserve that command separately if needed. The installer does not edit Claude settings.
+
+```json
+{
+  "statusLine": {
+    "type": "command",
+    "command": "python3 '/absolute/path/to/usage-limit/claude_usage_statusline.py'"
+  }
+}
+```
+
+Keep the path quoted if it contains spaces. The bridge prints remaining quota to Claude's status line and atomically stores only normalized quota fields plus an update timestamp at `${XDG_STATE_HOME:-~/.local/state}/usage-limit/claude.json`, with file permissions `0600`. It does not save transcripts, account details, or credentials.
+
+The widget and panel read that snapshot. Missing fields stay unknown; snapshots older than 15 minutes and windows whose reset time has passed become unavailable, never assumed 100% remaining. Gateway spend above its limit displays 0% remaining. Continue using an eligible Claude session to supply fresh data, then refresh Usage Limit.
+
+Automated tests use synthetic payloads, including the bridge-to-widget/panel path with other providers unavailable. **A real authenticated Claude Code session has not been validated.**
 
 ## GNOME/Ubuntu panel
 
@@ -37,6 +58,7 @@ python3 install_panel.py
 | Gemini | Antigravity groups whose model names contain Gemini, excluding Argon. |
 | Claude/GPT | Antigravity groups whose model names contain Claude or GPT. |
 | Argon | Antigravity groups whose model names contain Argon. |
+| Claude Code | Direct status-line snapshot, kept separate from Antigravity's Claude/GPT group. |
 
 Each indicator shows its logo and the **lowest remaining percentage** across its group's windows/accounts. Unknown quotas show `—`. Text is green at 60% or more, amber at 30–59%, and red below 30%. Color is accompanied by the percentage; the menu provides names, individual windows, reset times, and refresh/open-widget/quit actions. The panel refreshes every five minutes.
 
@@ -55,7 +77,7 @@ Create `${XDG_CONFIG_HOME:-~/.config}/usage-limit/config.json` with profiles for
 }
 ```
 
-Use `Alternar conta do Codex` in the widget's context menu to cycle profiles. The panel aggregates configured Codex profiles. Neither changes your Antigravity account. Without configuration, the current Codex account is used. The former `codex-token-window/config.json` remains a read-only fallback.
+Use `Alternar conta do Codex` in the widget's context menu to cycle profiles. The panel aggregates configured Codex profiles. Neither changes Antigravity or Claude Code accounts. Without configuration, the current Codex account is used. The former `codex-token-window/config.json` remains a read-only fallback.
 
 ## Desktop controls and tasks
 
@@ -63,7 +85,7 @@ The `Limites | Tarefas` control selects the view. Right-click to refresh, switch
 
 Drag across monitors or use `Mover para outro monitor` to cycle displays while preserving relative position. Resizing follows the current monitor's usable area and the view's aspect ratio. In click-through mode, the donut passes clicks to the desktop while the floating controls remain interactive.
 
-`Recolher na borda` shows **two provider capsules** at the monitor's right edge. Each keeps its logo, remaining percentage, and usage bar. Click a capsule to expand into that provider. Position and collapsed state persist; explicitly opening the app expands/restores and presents the existing GTK instance. Theme colors follow the system light/dark preference. `Esc` closes the widget.
+`Recolher na borda` shows **three provider capsules** at the monitor's right edge. Each keeps its logo, remaining percentage, and usage bar; unavailable quotas show `—`. Click a capsule to expand into that provider. Position and collapsed state persist; explicitly opening the app expands/restores and presents the existing GTK instance. Theme colors follow the system light/dark preference. `Esc` closes the widget.
 
 The task view polls up to ten unarchived Codex tasks every three seconds through one persistent local app server. Unchanged rollout snapshots are cached. Native active, approval, user-input, and system-error states take precedence; inferred running/completed states are identified in tooltips.
 
@@ -83,14 +105,14 @@ GNOME/KDE privacy settings may hide notification content while locked. Enable lo
 
 - The widget reads provider CLI output, Codex thread/rollout metadata, and its own configuration/state. Task titles and working-directory information can appear in the interface, diagnostics, or notifications.
 - It adds no telemetry or external collection endpoint. Provider processes handle authentication and may contact their services.
-- Widget preferences use XDG state directories. The panel caches rendered icons locally; installer manifests live under `${XDG_DATA_HOME:-~/.local/share}/usage-limit/`.
+- Widget preferences and the quota-only Claude snapshot use XDG state directories. The panel caches rendered icons locally; installer manifests live under `${XDG_DATA_HOME:-~/.local/share}/usage-limit/`.
 - The widget launcher defaults to `GDK_BACKEND=x11`. Wayland sessions need XWayland; positioning, pinning, click-through, and multiple monitors depend on the window manager. Native Wayland support is not provided.
-- Provider output may change between CLI versions. A provider can fail while another returns data. Task status can be inferred rather than authoritative. The Git worktree view and direct Claude Code bridge from [v0.1.0](https://github.com/mehiel-victor/usage-limit/tree/v0.1.0) are not included in this version.
+- Provider output may change between CLI versions. A provider can fail while another returns data. Task status can be inferred rather than authoritative. The Git worktree view from [v0.1.0](https://github.com/mehiel-victor/usage-limit/tree/v0.1.0) is not included.
 
 ## Troubleshooting
 
 For GTK/Cairo errors, install the [quick-start packages](../README.md#quick-start), including `python3-gi-cairo`, and use system Python. Plain virtual environments may not see distro bindings. The panel launcher uses `/usr/bin/python3`; its `--check` can identify missing Ayatana imports before installation.
 
-For missing panel icons, check the desktop's AppIndicators extension/support after imports pass. For missing usage, confirm that the provider CLI works as the same user and is discoverable at the paths above. For broken task links, check Codex Desktop's URL handler. If you moved the checkout, rerun the relevant installer.
+For missing panel icons, check the desktop's AppIndicators extension/support after imports pass. If Ayatana is installed only in the local fallback, plain Python test commands may need `GI_TYPELIB_PATH="$HOME/.local/share/usage-limit/typelibs"`; the panel launcher sets this path itself. For missing usage, confirm the CLI works as the same user or check Claude account eligibility, status-line execution, and snapshot age. For broken task links, check Codex Desktop's URL handler. If you moved the checkout, rerun the relevant installer.
 
 Optional diagnostics: `USAGE_LIMIT_DEBUG=1 ./launch-usage-limit` writes `/tmp/usage_limit_debug.log`. Review and redact provider output, task titles, paths, and screenshots before sharing. Use [GitHub issues](https://github.com/mehiel-victor/usage-limit/issues) for reproducible problems and the [security policy](../SECURITY.md) for sensitive reports.

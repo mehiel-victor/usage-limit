@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 import os
 import selectors
 import shutil
@@ -14,6 +15,12 @@ from pathlib import Path
 from typing import Any, Optional
 
 DEFAULT_TIMEOUT = 10
+SUPPORTED_PROVIDERS = ("Codex", "Antigravity", "Claude Code")
+CLAUDE_WINDOWS = {"five_hour": "5h", "seven_day": "7 dias", "spend_limit": "gasto"}
+CLAUDE_MAX_AGE = 15 * 60
+CLAUDE_STATE_FILE = Path(
+    os.environ.get("XDG_STATE_HOME", str(Path.home() / ".local" / "state"))
+) / "usage-limit" / "claude.json"
 CONFIG_ROOT = Path(
     os.environ.get("XDG_CONFIG_HOME", str(Path.home() / ".config"))
 )
@@ -254,6 +261,52 @@ def read_antigravity_limits() -> list[UsageLimit]:
     if not isinstance(payload, dict):
         raise ValueError("Antigravity returned invalid usage data")
     return parse_antigravity_limits(payload)
+
+
+def parse_claude_limits(payload: dict[str, Any]) -> list[UsageLimit]:
+    """Read only quota windows from Claude Code's documented status-line JSON."""
+    windows = payload.get("rate_limits")
+    if not isinstance(windows, dict):
+        return []
+    limits = []
+    for key, label in CLAUDE_WINDOWS.items():
+        window = windows.get(key)
+        if not isinstance(window, dict):
+            continue
+        percentage = window.get("used_percentage")
+        if isinstance(percentage, bool) or not isinstance(percentage, (int, float)):
+            continue
+        if isinstance(percentage, float) and not math.isfinite(percentage):
+            continue
+        reset = window.get("resets_at")
+        if isinstance(reset, bool) or not isinstance(reset, int):
+            reset = None
+        if reset is not None:
+            try:
+                datetime.fromtimestamp(reset)
+            except (ValueError, OverflowError, OSError):
+                reset = None
+        used = round(max(0, min(100, percentage)))
+        limits.append(UsageLimit("Claude Code", "Claude Code", label, used, reset))
+    return limits
+
+
+def read_claude_limits() -> list[UsageLimit]:
+    """Return fresh local quota data; missing, stale, and reset windows are unknown."""
+    try:
+        payload = json.loads(CLAUDE_STATE_FILE.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return []
+    if not isinstance(payload, dict):
+        return []
+    updated = payload.get("updated_at")
+    now = time.time()
+    if isinstance(updated, bool) or not isinstance(updated, (int, float)):
+        return []
+    if not now - CLAUDE_MAX_AGE <= updated <= now + 60:
+        return []
+    return [limit for limit in parse_claude_limits(payload)
+            if limit.resets_at is None or limit.resets_at > now]
 
 
 def configured_profiles() -> list[dict[str, str]]:

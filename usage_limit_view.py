@@ -9,6 +9,7 @@ from datetime import datetime
 from typing import Any, Optional
 
 from model_branding import model_mark
+from usage_sources import SUPPORTED_PROVIDERS
 
 try:
     import cairo
@@ -233,7 +234,7 @@ def _draw_model_watermark(context: Any, limit: Any, color: str) -> None:
 
 
 def control_at(x: float, y: float) -> Optional[str]:
-    if abs(x - PROVIDER_TOGGLE[0]) <= 24 and abs(y - PROVIDER_TOGGLE[1]) <= 11:
+    if abs(x - PROVIDER_TOGGLE[0]) <= 41 and abs(y - PROVIDER_TOGGLE[1]) <= 11:
         return "provider"
     for name, center in (
         ("passthrough", PASSTHROUGH_CONTROL),
@@ -446,25 +447,25 @@ def _draw_controls(
 ) -> None:
     toggle_x, toggle_y = PROVIDER_TOGGLE
     toggle_hovered = hovered == "provider" and len(available_providers) > 1
-    _rounded_rectangle(context, toggle_x - 23, toggle_y - 10, 46, 20, 10)
+    _rounded_rectangle(context, toggle_x - 40, toggle_y - 10, 80, 20, 10)
     _set_color(context, colors.control_hover if toggle_hovered else colors.control)
     context.fill()
-    for index, provider in enumerate(("Codex", "Antigravity")):
-        left = toggle_x - 22 + index * 22
+    for index, provider in enumerate(SUPPORTED_PROVIDERS):
+        left = toggle_x - 39 + index * 26
         active, enabled = provider == active_provider, provider in available_providers
         if active and enabled:
-            _rounded_rectangle(context, left, toggle_y - 9, 22, 18, 8)
+            _rounded_rectangle(context, left, toggle_y - 9, 26, 18, 8)
             _set_color(context, colors.control_active)
             context.fill()
         color = colors.primary if active and enabled else colors.icon if enabled else colors.tertiary
         _draw_text(
             context,
-            "C" if index == 0 else "A",
+            ("C", "A", "CC")[index],
             toggle_y,
             "Sans Bold 8",
             color,
             background_color=colors.background,
-            center_x=left + 11,
+            center_x=left + 13,
         )
     _draw_utility_controls(context, pinned, click_through, hovered, colors)
 

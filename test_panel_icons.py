@@ -27,7 +27,7 @@ class PanelIconTests(unittest.TestCase):
                     self.assertAlmostEqual(actual, (expected >> shift) & 255, delta=2)
 
     def test_quota_changes_only_the_text_preserving_the_logo(self):
-        for key in ("codex", "gemini", "claude", "argon"):
+        for key in ("codex", "gemini", "claude", "argon", "claude-code"):
             healthy = render_status(key, "88%", 88)
             depleted = render_status(key, "0%", 0)
             self.assertEqual(pixels(healthy, 0, 18), pixels(depleted, 0, 18))
@@ -41,7 +41,7 @@ class PanelIconTests(unittest.TestCase):
 
     def test_badges_fit_panel_height_and_unchanged_images_are_cached(self):
         with TemporaryDirectory() as directory:
-            for key in ("codex", "gemini", "claude", "argon"):
+            for key in ("codex", "gemini", "claude", "argon", "claude-code"):
                 surface = render_status(key, "100%", 100)
                 self.assertEqual(surface.get_height(), 20)
                 self.assertGreater(surface.get_width(), surface.get_height() * 1.5)

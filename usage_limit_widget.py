@@ -21,7 +21,10 @@ from collapsed_usage_view import (
     right_edge_position,
 )
 from collapsed_window_state import CollapsedWindowState
-from usage_sources import UsageLimit, configured_profiles, notify, read_antigravity_limits, read_codex_limits
+from usage_sources import (
+    SUPPORTED_PROVIDERS, UsageLimit, configured_profiles, notify,
+    read_antigravity_limits, read_claude_limits, read_codex_limits,
+)
 from task_sources import CodexTaskSource, MonitoredTask, open_codex_task
 from task_status_view import (
     ATTENTION_BUTTON_CENTER,
@@ -177,7 +180,7 @@ class UsageLimitWidget(CollapsedWindowState, Gtk.Window if Gtk is not None else 
         self._all_limits = limits
         providers = {limit.provider for limit in limits}
         if self._active_provider not in providers:
-            self._active_provider = next((provider for provider in ("Codex", "Antigravity") if provider in providers), None)
+            self._active_provider = next((provider for provider in SUPPORTED_PROVIDERS if provider in providers), None)
         self._limits = [limit for limit in limits if limit.provider == self._active_provider]
         self._selected_limit = max(0, min(self._selected_limit, len(self._limits) - 1))
         self._error = False
@@ -342,7 +345,7 @@ class UsageLimitWidget(CollapsedWindowState, Gtk.Window if Gtk is not None else 
         refresh = Gtk.MenuItem.new_with_label("Atualizar agora")
         refresh.connect("activate", lambda _item: self.refresh())
         menu.append(refresh)
-        toggle_prov = Gtk.MenuItem.new_with_label("Alternar provedor (Codex / Antigravity)")
+        toggle_prov = Gtk.MenuItem.new_with_label("Alternar provedor (Codex / Antigravity / Claude Code)")
         toggle_prov.connect("activate", lambda _item: self._toggle_provider())
         menu.append(toggle_prov)
         if len(self._profiles) > 1:
@@ -544,7 +547,7 @@ class UsageLimitWidget(CollapsedWindowState, Gtk.Window if Gtk is not None else 
                         "Provedores indisponíveis" if self._error else "Carregando provedores"
                     )
             else:
-                next_provider = "Antigravity" if self._active_provider == "Codex" else "Codex"
+                next_provider = self._next_provider()
                 tooltip.set_text(f"Mostrar limites do {next_provider}")
         elif target == "pin":
             tooltip.set_text("Desfixar da tela" if self._pinned else "Fixar na tela")
@@ -590,12 +593,20 @@ class UsageLimitWidget(CollapsedWindowState, Gtk.Window if Gtk is not None else 
     def _on_attention_window_destroyed(self, _window: Any) -> None:
         self._attention_window = None
 
+    def _next_provider(self) -> Optional[str]:
+        available = [provider for provider in SUPPORTED_PROVIDERS
+                     if any(limit.provider == provider for limit in self._all_limits)]
+        if not available:
+            return None
+        if self._active_provider not in available:
+            return available[0]
+        return available[(available.index(self._active_provider) + 1) % len(available)]
+
     def _toggle_provider(self) -> None:
-        providers = {limit.provider for limit in self._all_limits}
-        log_debug(f"Toggle provider: all_limits={[(l.provider, l.name) for l in self._all_limits]}, providers={providers}")
-        if len(providers) < 2:
+        provider = self._next_provider()
+        if provider is None or provider == self._active_provider:
             return
-        self._active_provider = "Antigravity" if self._active_provider == "Codex" else "Codex"
+        self._active_provider = provider
         self._limits = [limit for limit in self._all_limits if limit.provider == self._active_provider]
         self._selected_limit = min(self._selected_limit, max(0, len(self._limits) - 1))
         log_debug(f"Switched provider to: {self._active_provider}, new limits length: {len(self._limits)}")
@@ -765,7 +776,7 @@ class UsageLimitWidget(CollapsedWindowState, Gtk.Window if Gtk is not None else 
                 PROVIDER_TOGGLE,
                 allocation.width,
                 allocation.height,
-                24,
+                41,
                 11,
             )
             region.union(cairo.Region(provider_region))
@@ -840,7 +851,7 @@ class UsageLimitWidget(CollapsedWindowState, Gtk.Window if Gtk is not None else 
 
     def _load_limits(self, home: str, generation: int) -> None:
         try:
-            results: list[Optional[list[UsageLimit]]] = [None, None]
+            results: list[Optional[list[UsageLimit]]] = [None, None, None]
             workers = [
                 threading.Thread(
                     target=self._collect_source,
@@ -850,6 +861,11 @@ class UsageLimitWidget(CollapsedWindowState, Gtk.Window if Gtk is not None else 
                 threading.Thread(
                     target=self._collect_source,
                     args=(read_antigravity_limits, results, 1),
+                    daemon=True,
+                ),
+                threading.Thread(
+                    target=self._collect_source,
+                    args=(read_claude_limits, results, 2),
                     daemon=True,
                 ),
             ]

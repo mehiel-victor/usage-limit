@@ -31,12 +31,15 @@ def _load_mark(filename: str, size: int) -> Any:
 MODEL_MARKS = {
     "openai": _load_mark("openai-symbol.svg", 150),
     "antigravity": _load_mark("antigravity-icon.png", 150),
+    "claude": _load_mark("panel-claude.png", 150),
 }
 
 
 def model_mark(model_name: str, provider: str) -> Optional[Any]:
     """Select the closest available brand mark for the displayed model."""
     normalized = model_name.lower()
+    if provider == "Claude Code":
+        return MODEL_MARKS.get("claude")
     if "gpt" in normalized or "codex" in normalized:
         return MODEL_MARKS.get("openai")
     if provider == "Antigravity":

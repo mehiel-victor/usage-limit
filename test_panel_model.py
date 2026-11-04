@@ -22,7 +22,7 @@ class PanelModelTests(unittest.TestCase):
                   UsageLimit("Antigravity", "Gemini 4 Argon", "weekly", 43)]
         groups = group_limits(limits)
         self.assertEqual({key: remaining_percent(items) for key, items in groups.items()},
-                         {"codex": 89, "gemini": 78, "claude": 35, "argon": 57})
+                         {"codex": 89, "gemini": 78, "claude": 35, "argon": 57, "claude-code": None})
 
     def test_unknown_quota_is_not_reported_as_full_or_empty(self):
         self.assertIsNone(remaining_percent([]))

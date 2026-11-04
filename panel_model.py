@@ -18,6 +18,7 @@ GROUPS = (
     PanelGroup("gemini", "Gemini", "Antigravity · Gemini"),
     PanelGroup("claude", "Claude", "Antigravity · Claude e GPT (cota compartilhada)"),
     PanelGroup("argon", "Argon", "Antigravity · Gemini 4 Argon"),
+    PanelGroup("claude-code", "Claude Code", "Claude Code · assinatura ou gateway"),
 )
 
 
@@ -27,6 +28,8 @@ def group_limits(limits: list[UsageLimit]) -> dict[str, list[UsageLimit]]:
         name = limit.name.casefold()
         if limit.provider == "Codex":
             key = "codex"
+        elif limit.provider == "Claude Code":
+            key = "claude-code"
         elif limit.provider != "Antigravity":
             continue
         elif "argon" in name:

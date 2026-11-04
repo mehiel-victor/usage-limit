@@ -2,7 +2,7 @@
 
 **Keep AI usage limits and Codex tasks in view while you code.**
 
-A floating Linux desktop widget for **Codex and Antigravity**, with an optional **GNOME/Ubuntu top-bar indicator**. Built with Python, GTK 3, and Cairo.
+A floating Linux desktop widget for **Codex, Antigravity, and Claude Code**, with an optional **GNOME/Ubuntu top-bar indicator**. Built with Python, GTK 3, and Cairo.
 
 [![Checks](https://github.com/mehiel-victor/usage-limit/actions/workflows/checks.yml/badge.svg)](https://github.com/mehiel-victor/usage-limit/actions/workflows/checks.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
@@ -21,8 +21,8 @@ A floating Linux desktop widget for **Codex and Antigravity**, with an optional 
 
 - **Usage at a glance:** remaining percentages and reset times from supported providers; cycle through available windows and providers.
 - **Codex task status:** recent tasks, an active task queue, and direct links back to Codex Desktop.
-- **GNOME top-bar quotas:** four groups for Codex, Gemini, shared Claude/GPT, and Gemini 4 Argon, using Codex and Antigravity data.
-- **A compact edge dock:** collapse into two provider capsules, then click a capsule to expand.
+- **GNOME top-bar quotas:** five separate groups for Codex, Gemini, Antigravity Claude/GPT, Gemini 4 Argon, and direct Claude Code usage.
+- **A compact edge dock:** collapse into three provider capsules, then click a capsule to expand.
 - **Desktop controls and alerts:** pinning, click-through, resize, monitor switching, saved position, approval/low-limit notifications, and opt-in lockscreen task notices.
 
 The widget adds no telemetry. It reads provider CLI output and local task data; provider CLIs may contact their own services. Claude/GPT and Argon quotas come from Antigravity, without separate logins. Codex quotas do not represent ChatGPT conversation limits. See [data access and limitations](docs/usage.md#data-access-and-limitations).
@@ -50,8 +50,11 @@ cd usage-limit
 | --- | --- |
 | Codex | Install Codex and sign in. The widget reads usage through its local app server. |
 | Antigravity | Install and sign in to the Antigravity CLI with structured `/usage` output. |
+| Claude Code | Configure the optional [local status-line bridge](docs/usage.md#claude-code) for an eligible account. |
 
 Another working provider can still supply usage data when one fails. Codex task links require Codex Desktop and its `codex://` URL handler. Reopening the widget restores and presents its existing instance.
+
+Claude Code support is tested with synthetic payloads; an authenticated Claude Code session has not been validated. Missing, stale, or reset quota windows remain unavailable.
 
 ## Optional GNOME/Ubuntu panel
 
@@ -82,7 +85,7 @@ Update with `git pull --ff-only`, then restart the widget. Remove the managed la
 
 Quit the panel through `Sair do indicador` before uninstalling. The uninstaller removes both installers' managed entries, preserving modified files. It does not delete your checkout, provider configuration, or widget preferences.
 
-Upgrading from [v0.1.0](https://github.com/mehiel-victor/usage-limit/tree/v0.1.0)? This version no longer includes the Git view or direct Claude Code status-line bridge; that tag remains a historical snapshot.
+Upgrading from [v0.1.0](https://github.com/mehiel-victor/usage-limit/tree/v0.1.0)? The Git view is no longer included. The Claude Code bridge now normalizes quota fields and expires stale snapshots; direct Claude Code usage is separate from Antigravity's Claude/GPT group.
 
 ## Make your first contribution
 
@@ -101,7 +104,7 @@ bash -n launch-usage-limit
 sh -n launch-usage-limit-panel
 ```
 
-The suite covers panel grouping/icons and widget activation. It does not replace desktop smoke tests or provider integration testing. See [CONTRIBUTING.md](CONTRIBUTING.md) for the full validation workflow.
+The suite covers panel grouping/icons, widget activation, and the Claude bridge through the widget/panel using synthetic payloads. It does not replace desktop or authenticated provider tests. See [CONTRIBUTING.md](CONTRIBUTING.md) for the full validation workflow.
 
 If Usage Limit is useful to you, a star helps others discover it. Sharing your setup and contributing a fix helps the project grow.
 

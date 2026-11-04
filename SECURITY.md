@@ -19,8 +19,12 @@ guarantee is offered.
 The widget invokes locally installed provider CLIs. Their authentication and
 network behavior remain under those tools' control; the widget has no telemetry
 or separate analytics service. Codex task status can read local thread metadata
-and rollout files. The panel groups quotas returned by Codex and Antigravity;
-it does not read a separate Claude Code account.
+and rollout files. The panel keeps Codex, Antigravity model groups, and direct
+Claude Code quotas separate. The optional Claude Code status-line bridge reads
+JSON from stdin and saves only normalized quota percentages, reset times, and an
+update timestamp in a private local file. It does not save session identifiers,
+transcript paths, credentials, or unrelated status-line fields. Missing, stale,
+or expired quotas are unavailable rather than assumed to be full.
 
 The widget can send desktop notifications for approvals and low limits. The
 optional lockscreen mode includes task titles and activity in resident

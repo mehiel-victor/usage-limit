@@ -25,7 +25,7 @@ credentials, account snapshots, task transcripts, or personal worktree paths.
 
 | Area | Files |
 | --- | --- |
-| Usage adapters and profiles | `usage_sources.py` |
+| Usage adapters and profiles | `usage_sources.py`, `claude_usage_statusline.py` |
 | Task state and navigation | `task_sources.py`, `attention_queue_window.py` |
 | GNOME panel and quota groups | `usage_limit_panel.py`, `panel_model.py`, `panel_icons.py` |
 | Cairo views and branding | `usage_limit_view.py`, `task_status_view.py`, `collapsed_usage_view.py`, `model_branding.py` |
@@ -50,7 +50,9 @@ git diff --check
 ```
 
 CI checks quota grouping, panel icon rendering, installer preservation, widget
-activation, Python/shell syntax, and imports with GTK/Ayatana installed.
+activation, the Claude Code status-line contract, Python/shell syntax, and imports
+with GTK/Ayatana installed. Claude tests exercise the actual bridge command,
+snapshot reader, widget collection, and panel collection using synthetic data.
 It does not exercise provider accounts or a live GNOME desktop session.
 Add tests alongside the existing `test_*.py` files without real credentials.
 

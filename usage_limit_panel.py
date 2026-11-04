@@ -18,20 +18,21 @@ from gi.repository import AyatanaAppIndicator3, Gio, GLib, Gtk
 
 from panel_icons import status_icon
 from panel_model import GROUPS, group_label, group_limits, remaining_percent
-from usage_sources import UsageLimit, configured_profiles, read_antigravity_limits, read_codex_limits
+from usage_sources import UsageLimit, configured_profiles, read_antigravity_limits, read_claude_limits, read_codex_limits
 
 APP_DIR = Path(__file__).resolve().parent
-WINDOW_NAMES = {"session": "Sessão", "weekly": "Semana", "5h": "5 horas", "usage": "Uso"}
+WINDOW_NAMES = {"session": "Sessão", "weekly": "Semana", "5h": "5 horas", "7 dias": "7 dias", "gasto": "Limite de gasto", "usage": "Uso"}
 
 
 def collect_limits() -> tuple[list[UsageLimit], set[str]]:
     """Keep provider failures independent and never expose exception payloads."""
     limits: list[UsageLimit] = []
     failed: set[str] = set()
-    with ThreadPoolExecutor(max_workers=2) as pool:
+    with ThreadPoolExecutor(max_workers=3) as pool:
         codex = [(profile, pool.submit(read_codex_limits, profile["home"]))
                  for profile in configured_profiles()]
         antigravity = pool.submit(read_antigravity_limits)
+        claude = pool.submit(read_claude_limits)
         for profile, future in codex:
             try:
                 for item in future.result():
@@ -43,6 +44,10 @@ def collect_limits() -> tuple[list[UsageLimit], set[str]]:
             limits.extend(antigravity.result())
         except (OSError, ValueError, RuntimeError, subprocess.SubprocessError):
             failed.add("Antigravity")
+        try:
+            limits.extend(claude.result())
+        except (OSError, ValueError, RuntimeError, subprocess.SubprocessError):
+            failed.add("Claude Code")
     return limits, failed
 
 
@@ -121,7 +126,7 @@ class UsagePanel(Gtk.Application):
             self.add_detail(menu, "Saldo restante")
             menu.append(Gtk.SeparatorMenuItem())
             if not windows:
-                source = "Codex" if group.key == "codex" else "Antigravity"
+                source = {"codex": "Codex", "claude-code": "Claude Code"}.get(group.key, "Antigravity")
                 status = "Consultando…" if loading else "Falha na consulta; tente atualizar" if source in failed else "Cota não informada pelo serviço"
                 description.append(status)
                 self.add_detail(menu, status)
