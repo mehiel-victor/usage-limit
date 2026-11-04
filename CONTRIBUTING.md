@@ -53,7 +53,9 @@ CI checks quota grouping, panel icon rendering, installer preservation, widget
 activation, the Claude Code status-line contract, Python/shell syntax, and imports
 with GTK/Ayatana installed. Claude tests exercise the actual bridge command,
 snapshot reader, widget collection, and panel collection using synthetic data.
-Collapsed dock tests cover rendering, monitor edges, click regions, and expansion.
+Collapsed dock tests cover rendering, adaptive sizes, available-provider rows,
+monitor edges, click regions, and expansion. Visibility tests keep real zero
+quotas visible while hiding unavailable providers in the dock, selector, and panel.
 It does not exercise provider accounts or a live GNOME desktop session.
 Add tests alongside the existing `test_*.py` files without real credentials.
 

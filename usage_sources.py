@@ -41,6 +41,11 @@ class UsageLimit:
         return max(0, min(100, 100 - self.used_percent))
 
 
+def available_providers(limits: list[UsageLimit]) -> tuple[str, ...]:
+    providers = {item.provider for item in limits}
+    return tuple(provider for provider in SUPPORTED_PROVIDERS if provider in providers)
+
+
 def _percent(value: Any) -> Optional[int]:
     if not isinstance(value, (int, float)) or isinstance(value, bool):
         return None

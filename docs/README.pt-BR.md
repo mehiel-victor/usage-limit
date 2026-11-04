@@ -17,8 +17,8 @@ Widget flutuante para Linux com suporte a **Codex, Antigravity e Claude Code** e
 
 - **Limites visíveis:** percentuais restantes e horários de renovação; alterne entre provedores e janelas disponíveis.
 - **Tarefas do Codex:** veja tarefas recentes, abra a fila de tarefas ativas e retorne à conversa no Codex Desktop.
-- **Cotas na barra superior:** cinco grupos separados para Codex, Gemini, Claude/GPT do Antigravity, Gemini 4 Argon e uso direto do Claude Code.
-- **Modo compacto:** três cápsulas pretas na borda esquerda, com barra vertical e logo circular; clique para expandir.
+- **Cotas na barra superior:** grupos separados para Codex, Gemini, Claude/GPT do Antigravity, Gemini 4 Argon e Claude Code, exibidos somente quando há cota disponível.
+- **Modo compacto:** cápsulas menores, dimensionadas para o monitor, com uma linha por provedor disponível; clique para expandir.
 - **Controles e alertas:** fixação, passagem de cliques, redimensionamento, troca de monitor, posição salva, notificações de aprovação/saldo baixo e avisos opcionais no lockscreen.
 
 O widget não adiciona telemetria. Ele lê a saída das CLIs e dados locais de tarefas; as CLIs podem acessar os serviços dos respectivos provedores. As cotas Claude/GPT e Argon vêm do Antigravity, sem login separado. A cota do Codex não representa os limites das conversas do ChatGPT. Veja [acesso a dados e limitações](usage.md#data-access-and-limitations).
@@ -50,7 +50,7 @@ cd usage-limit
 
 Um provedor indisponível não impede a leitura dos demais. Para abrir tarefas, é necessário o Codex Desktop com o protocolo `codex://` registrado. Abrir o widget novamente restaura e apresenta a instância existente.
 
-O suporte ao Claude Code foi testado com dados fictícios; uma sessão autenticada real ainda não foi validada. Cotas ausentes, antigas ou já renovadas permanecem indisponíveis.
+O suporte ao Claude Code foi testado com dados fictícios; uma sessão autenticada real ainda não foi validada. Provedores sem cota válida ficam ocultos, inclusive dados ausentes, antigos ou já renovados do Claude. Uma cota real com 0% restante continua visível.
 
 ## Painel opcional no GNOME/Ubuntu
 

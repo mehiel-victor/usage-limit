@@ -74,8 +74,6 @@ class UsagePanel(Gtk.Application):
             indicator.set_ordering_index(100 + index)
             self.indicators[group.key] = indicator
         self.render([], set(), loading=True)
-        for indicator in self.indicators.values():
-            indicator.set_status(AyatanaAppIndicator3.IndicatorStatus.ACTIVE)
         self.refresh()
         self.timer = GLib.timeout_add_seconds(300, self.refresh)
 
@@ -120,16 +118,15 @@ class UsagePanel(Gtk.Application):
         self.refresh_items = []
         for group in GROUPS:
             windows = groups[group.key]
+            indicator = self.indicators[group.key]
+            if not windows:
+                indicator.set_status(AyatanaAppIndicator3.IndicatorStatus.PASSIVE)
+                continue
             description = [group.title]
             menu = Gtk.Menu()
             self.add_detail(menu, group.title)
             self.add_detail(menu, "Saldo restante")
             menu.append(Gtk.SeparatorMenuItem())
-            if not windows:
-                source = {"codex": "Codex", "claude-code": "Claude Code"}.get(group.key, "Antigravity")
-                status = "Consultando…" if loading else "Falha na consulta; tente atualizar" if source in failed else "Cota não informada pelo serviço"
-                description.append(status)
-                self.add_detail(menu, status)
             for item in windows:
                 window = WINDOW_NAMES.get(item.window, item.window)
                 reset = datetime.fromtimestamp(item.resets_at).strftime("%d/%m às %H:%M") if item.resets_at else "não informado"
@@ -138,7 +135,6 @@ class UsagePanel(Gtk.Application):
                 self.add_detail(menu, f"Renova {reset}")
                 if group.key == "codex" and len(configured_profiles()) > 1:
                     self.add_detail(menu, item.name)
-            indicator = self.indicators[group.key]
             indicator.set_icon_full(str(status_icon(group.key, group_label(group, windows), remaining_percent(windows))), "\n".join(description))
             indicator.set_label("", "")
             menu.append(Gtk.SeparatorMenuItem())
@@ -151,6 +147,7 @@ class UsagePanel(Gtk.Application):
             menu.show_all()
             old_menu = indicator.get_menu()
             indicator.set_menu(menu)
+            indicator.set_status(AyatanaAppIndicator3.IndicatorStatus.ACTIVE)
             if old_menu:
                 old_menu.destroy()
 

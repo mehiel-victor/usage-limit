@@ -8,7 +8,7 @@ import math
 from typing import Any, Optional
 
 from usage_limit_view import _draw_text, _rounded_rectangle, _set_color, usage_color
-from usage_sources import SUPPORTED_PROVIDERS
+from usage_sources import SUPPORTED_PROVIDERS, available_providers
 
 try:
     import cairo
@@ -67,11 +67,30 @@ else:
     PROVIDER_LOGOS = {}
 
 
-def provider_at(x: float, y: float) -> Optional[str]:
+def capsule_tops(limits: list[Any]) -> tuple[int, ...]:
+    return tuple(4 + index * (CAPSULE_HEIGHT + CAPSULE_GAP)
+                 for index in range(len(available_providers(limits))))
+
+
+def collapsed_base_height(limits: list[Any]) -> int:
+    count = len(available_providers(limits))
+    return 8 + count * CAPSULE_HEIGHT + max(0, count - 1) * CAPSULE_GAP
+
+
+def collapsed_dimensions(limits: list[Any], workarea_size: tuple[int, int]) -> tuple[int, int]:
+    """Use logical workarea units; GTK already handles the monitor's HiDPI scale."""
+    width, height = workarea_size
+    base_height = collapsed_base_height(limits)
+    capsule_height = max(44, min(52, round(height * 0.045)))
+    scale = min(capsule_height / CAPSULE_HEIGHT, width / COLLAPSED_WIDTH, height / base_height)
+    return max(1, round(COLLAPSED_WIDTH * scale)), max(1, round(base_height * scale))
+
+
+def provider_at(x: float, y: float, limits: list[Any]) -> Optional[str]:
     """Return the provider represented by the capsule under a point."""
     if not CAPSULE_X <= x <= COLLAPSED_WIDTH:
         return None
-    for provider, top in zip(PROVIDERS, CAPSULE_TOPS):
+    for provider, top in zip(available_providers(limits), capsule_tops(limits)):
         radius = CAPSULE_HEIGHT / 2
         if top <= y <= top + CAPSULE_HEIGHT and (
             x <= LOGO_CENTER_X or (x - LOGO_CENTER_X) ** 2 + (y - top - radius) ** 2 <= radius ** 2
@@ -88,24 +107,26 @@ def provider_remaining(limits: list[Any], provider: str) -> Optional[int]:
 
 def collapsed_accessible_label(limits: list[Any]) -> str:
     values = []
-    for provider in PROVIDERS:
+    for provider in available_providers(limits):
         remaining = provider_remaining(limits, provider)
         status = "indisponível" if remaining is None else f"{remaining}% restante"
         values.append(f"{provider}: {status}")
     return "Limites recolhidos. " + ". ".join(values) + ". Pressione Enter para expandir."
 
 
-def left_edge_position(
+def collapsed_geometry(
     x: int,
     y: int,
     width: int,
     height: int,
     workareas: list[tuple[int, int, int, int]],
-) -> tuple[int, int]:
+    limits: list[Any],
+) -> tuple[int, int, int, int]:
     """Dock to the selected monitor's left workarea edge, including negative origins."""
     valid_areas = [area for area in workareas if area[2] > 0 and area[3] > 0]
     if not valid_areas:
-        return x, y
+        dock_width, dock_height = collapsed_dimensions(limits, (1920, 1080))
+        return x, y, dock_width, dock_height
 
     def overlap(area: tuple[int, int, int, int]) -> int:
         area_x, area_y, area_width, area_height = area
@@ -118,8 +139,9 @@ def left_edge_position(
         key=lambda area: (overlap(area), area[0] <= x + width / 2 < area[0] + area[2]),
     )
     docked_x = area_x
-    docked_y = max(area_y, min(y, area_y + area_height - COLLAPSED_HEIGHT))
-    return docked_x, docked_y
+    dock_width, dock_height = collapsed_dimensions(limits, (area_width, area_height))
+    docked_y = max(area_y, min(y, area_y + area_height - dock_height))
+    return docked_x, docked_y, dock_width, dock_height
 
 
 def _draw_logo(context: Any, provider: str, center_y: float) -> None:
@@ -176,16 +198,17 @@ def _draw_usage_bar(context: Any, remaining: Optional[int], top: int) -> None:
     context.fill()
 
 
-def collapsed_input_region(width: int, height: int) -> Any:
+def collapsed_input_region(width: int, height: int, limits: list[Any]) -> Any:
     """Let the desktop receive clicks in the transparent gaps and rounded corners."""
     if width <= 0 or height <= 0:
         return cairo.Region()
-    scale = min(width / COLLAPSED_WIDTH, height / COLLAPSED_HEIGHT)
+    scale = min(width / COLLAPSED_WIDTH, height / collapsed_base_height(limits))
+    tops = capsule_tops(limits)
     region = cairo.Region()
     radius = CAPSULE_HEIGHT / 2
     for row in range(height):
         y = (row + 0.5) / scale
-        top = next((top for top in CAPSULE_TOPS if top <= y < top + CAPSULE_HEIGHT), None)
+        top = next((top for top in tops if top <= y < top + CAPSULE_HEIGHT), None)
         if top is None:
             continue
         right = LOGO_CENTER_X + math.sqrt(max(0, radius ** 2 - (y - top - radius) ** 2))
@@ -203,7 +226,7 @@ def draw_collapsed_widget(
     context.set_operator(cairo.OPERATOR_CLEAR)
     context.paint()
     context.set_operator(cairo.OPERATOR_OVER)
-    for provider, top in zip(PROVIDERS, CAPSULE_TOPS):
+    for provider, top in zip(available_providers(limits), capsule_tops(limits)):
         remaining = provider_remaining(limits, provider)
         radius = CAPSULE_HEIGHT / 2
         context.new_path()

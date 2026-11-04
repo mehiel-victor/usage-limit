@@ -13,18 +13,17 @@ from typing import Any, Optional
 
 from attention_queue_window import AttentionQueueWindow
 from collapsed_usage_view import (
-    COLLAPSED_HEIGHT,
     COLLAPSED_WIDTH,
     draw_collapsed_widget,
     provider_at,
     provider_remaining,
     collapsed_input_region,
-    collapsed_accessible_label,
-    left_edge_position,
+    collapsed_base_height,
+    collapsed_geometry,
 )
 from collapsed_window_state import CollapsedWindowState
 from usage_sources import (
-    SUPPORTED_PROVIDERS, UsageLimit, configured_profiles, notify,
+    SUPPORTED_PROVIDERS, UsageLimit, available_providers, configured_profiles, notify,
     read_antigravity_limits, read_claude_limits, read_codex_limits,
 )
 from task_sources import CodexTaskSource, MonitoredTask, open_codex_task
@@ -181,6 +180,7 @@ class UsageLimitWidget(CollapsedWindowState, Gtk.Window if Gtk is not None else 
     def _render_limits(self, limits: list[UsageLimit]) -> None:
         self._all_limits = limits
         providers = {limit.provider for limit in limits}
+        self._provider_menu_item.set_visible(len(providers) > 1)
         if self._active_provider not in providers:
             self._active_provider = next((provider for provider in SUPPORTED_PROVIDERS if provider in providers), None)
         self._limits = [limit for limit in limits if limit.provider == self._active_provider]
@@ -188,13 +188,13 @@ class UsageLimitWidget(CollapsedWindowState, Gtk.Window if Gtk is not None else 
         self._error = False
         self._critical_phase = False
         if self._collapsed:
-            self.area.get_accessible().set_name(collapsed_accessible_label(self._all_limits))
+            self._apply_collapsed_geometry(self.get_position(), self.get_size())
         self.area.queue_draw()
 
     def _on_draw(self, _area: Any, context: Any) -> bool:
         allocation = self.area.get_allocation()
         if self._collapsed:
-            scale = min(allocation.width / COLLAPSED_WIDTH, allocation.height / COLLAPSED_HEIGHT)
+            scale = min(allocation.width / COLLAPSED_WIDTH, allocation.height / collapsed_base_height(self._all_limits))
             context.save()
             context.scale(scale, scale)
             hovered_provider = None
@@ -260,7 +260,7 @@ class UsageLimitWidget(CollapsedWindowState, Gtk.Window if Gtk is not None else 
     def _base_point(self, x: float, y: float) -> tuple[float, float]:
         allocation = self.area.get_allocation()
         base_width = COLLAPSED_WIDTH if self._collapsed else WIDGET_SIZE
-        base_height = COLLAPSED_HEIGHT if self._collapsed else expanded_base_height(self._view_mode)
+        base_height = collapsed_base_height(self._all_limits) if self._collapsed else expanded_base_height(self._view_mode)
         scale = min(allocation.width / base_width, allocation.height / base_height)
         return x / scale, y / scale
 
@@ -324,12 +324,12 @@ class UsageLimitWidget(CollapsedWindowState, Gtk.Window if Gtk is not None else 
         self._press_origin = (event.x_root, event.y_root)
         base_x, base_y = self._base_point(event.x, event.y)
         if self._collapsed:
-            provider = provider_at(base_x, base_y)
+            provider = provider_at(base_x, base_y, self._all_limits)
             self._press_target = f"collapsed:{provider}" if provider else None
             self._did_drag = False
             return True
         selected_mode = mode_at(base_x, base_y)
-        self._press_target = f"mode:{selected_mode}" if selected_mode else control_at(base_x, base_y)
+        self._press_target = f"mode:{selected_mode}" if selected_mode else control_at(base_x, base_y, len(available_providers(self._all_limits)))
         if self._view_mode != "usage" and self._press_target == "provider":
             self._press_target = None
         shown_tasks = visible_tasks(self._tasks, self._view_mode)
@@ -349,9 +349,11 @@ class UsageLimitWidget(CollapsedWindowState, Gtk.Window if Gtk is not None else 
         refresh = Gtk.MenuItem.new_with_label("Atualizar agora")
         refresh.connect("activate", lambda _item: self.refresh())
         menu.append(refresh)
-        toggle_prov = Gtk.MenuItem.new_with_label("Alternar provedor (Codex / Antigravity / Claude Code)")
-        toggle_prov.connect("activate", lambda _item: self._toggle_provider())
-        menu.append(toggle_prov)
+        self._provider_menu_item = Gtk.MenuItem.new_with_label("Alternar provedor")
+        self._provider_menu_item.set_no_show_all(True)
+        self._provider_menu_item.set_visible(False)
+        self._provider_menu_item.connect("activate", lambda _item: self._toggle_provider())
+        menu.append(self._provider_menu_item)
         if len(self._profiles) > 1:
             account = Gtk.MenuItem.new_with_label("Alternar conta do Codex")
             account.connect("activate", lambda _item: self._next_account())
@@ -422,7 +424,7 @@ class UsageLimitWidget(CollapsedWindowState, Gtk.Window if Gtk is not None else 
         if self._collapsed:
             if self._press_origin is None:
                 base_x, base_y = self._base_point(event.x, event.y)
-                provider = provider_at(base_x, base_y)
+                provider = provider_at(base_x, base_y, self._all_limits)
                 hovered = f"collapsed:{provider}" if provider else None
                 if hovered != self._hovered_control:
                     self._hovered_control = hovered
@@ -448,7 +450,7 @@ class UsageLimitWidget(CollapsedWindowState, Gtk.Window if Gtk is not None else 
         if self._press_origin is None:
             base_x, base_y = self._base_point(event.x, event.y)
             selected_mode = mode_at(base_x, base_y)
-            hovered = f"mode:{selected_mode}" if selected_mode else control_at(base_x, base_y)
+            hovered = f"mode:{selected_mode}" if selected_mode else control_at(base_x, base_y, len(available_providers(self._all_limits)))
             if self._view_mode != "usage" and hovered == "provider":
                 hovered = None
             if self._view_mode != "usage" and hovered is None:
@@ -515,7 +517,7 @@ class UsageLimitWidget(CollapsedWindowState, Gtk.Window if Gtk is not None else 
     def _on_tooltip(self, _area: Any, x: int, y: int, _keyboard_mode: bool, tooltip: Any) -> bool:
         base_x, base_y = self._base_point(x, y)
         if self._collapsed:
-            provider = provider_at(base_x, base_y)
+            provider = provider_at(base_x, base_y, self._all_limits)
             if provider is None:
                 return False
             remaining = provider_remaining(self._all_limits, provider)
@@ -523,7 +525,7 @@ class UsageLimitWidget(CollapsedWindowState, Gtk.Window if Gtk is not None else 
             tooltip.set_text(f"{provider}: {status}. Clique para expandir.")
             return True
         selected_mode = mode_at(base_x, base_y)
-        target = f"mode:{selected_mode}" if selected_mode else control_at(base_x, base_y)
+        target = f"mode:{selected_mode}" if selected_mode else control_at(base_x, base_y, len(available_providers(self._all_limits)))
         if self._view_mode != "usage" and target == "provider":
             target = None
         over_attention = self._view_mode != "usage" and attention_button_at(base_x, base_y)
@@ -598,8 +600,7 @@ class UsageLimitWidget(CollapsedWindowState, Gtk.Window if Gtk is not None else 
         self._attention_window = None
 
     def _next_provider(self) -> Optional[str]:
-        available = [provider for provider in SUPPORTED_PROVIDERS
-                     if any(limit.provider == provider for limit in self._all_limits)]
+        available = available_providers(self._all_limits)
         if not available:
             return None
         if self._active_provider not in available:
@@ -707,15 +708,19 @@ class UsageLimitWidget(CollapsedWindowState, Gtk.Window if Gtk is not None else 
         x, y = self.get_position()
         width, height = self.get_size()
         if self._collapsed:
-            safe_x, safe_y = left_edge_position(
+            if not self._all_limits:
+                self._expand_from_provider(self._active_provider or "Codex")
+                return False
+            safe_x, safe_y, dock_width, dock_height = collapsed_geometry(
                 x,
                 y,
                 width,
                 height,
                 self._monitor_workareas(),
+                self._all_limits,
             )
-            if (safe_x, safe_y) != (x, y):
-                self.move(safe_x, safe_y)
+            if (safe_x, safe_y, dock_width, dock_height) != (x, y, width, height):
+                self._apply_collapsed_geometry((x, y), (width, height))
             return False
         safe_x, safe_y = clamp_window_position(
             x,
@@ -762,7 +767,7 @@ class UsageLimitWidget(CollapsedWindowState, Gtk.Window if Gtk is not None else 
             return False
         allocation = self.get_allocation()
         if self._collapsed:
-            window.input_shape_combine_region(collapsed_input_region(allocation.width, allocation.height), 0, 0)
+            window.input_shape_combine_region(collapsed_input_region(allocation.width, allocation.height, self._all_limits), 0, 0)
             return False
         if not self._click_through:
             full_region = cairo.Region(cairo.RectangleInt(0, 0, allocation.width, allocation.height))
@@ -778,16 +783,16 @@ class UsageLimitWidget(CollapsedWindowState, Gtk.Window if Gtk is not None else 
                 control_region((120, 41), allocation.width, allocation.height, 73, 14)
             )
         )
-        if self._view_mode == "usage":
+        if self._view_mode == "usage" and len(available_providers(self._all_limits)) > 1:
             provider_region = control_region(
                 PROVIDER_TOGGLE,
                 allocation.width,
                 allocation.height,
-                41,
+                len(available_providers(self._all_limits)) * 13 + 2,
                 11,
             )
             region.union(cairo.Region(provider_region))
-        else:
+        elif self._view_mode != "usage":
             attention_region = control_region(
                 ATTENTION_BUTTON_CENTER,
                 allocation.width,
@@ -918,8 +923,9 @@ class UsageLimitWidget(CollapsedWindowState, Gtk.Window if Gtk is not None else 
             self._active_provider = None
             self._selected_limit = 0
             self._critical_phase = False
+            self._provider_menu_item.set_visible(False)
             if self._collapsed:
-                self.area.get_accessible().set_name(collapsed_accessible_label([]))
+                self._expand_from_provider("Codex")
             self.area.queue_draw()
         return False
 

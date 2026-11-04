@@ -21,8 +21,8 @@ A floating Linux desktop widget for **Codex, Antigravity, and Claude Code**, wit
 
 - **Usage at a glance:** remaining percentages and reset times from supported providers; cycle through available windows and providers.
 - **Codex task status:** recent tasks, an active task queue, and direct links back to Codex Desktop.
-- **GNOME top-bar quotas:** five separate groups for Codex, Gemini, Antigravity Claude/GPT, Gemini 4 Argon, and direct Claude Code usage.
-- **A compact left-edge dock:** three black capsules with a vertical quota bar and circular provider logo; click to expand.
+- **GNOME top-bar quotas:** separate groups for Codex, Gemini, Antigravity Claude/GPT, Gemini 4 Argon, and direct Claude Code, shown only when quota data is available.
+- **A compact left-edge dock:** smaller black capsules sized for your monitor, with one row per available provider; click to expand.
 - **Desktop controls and alerts:** pinning, click-through, resize, monitor switching, saved position, approval/low-limit notifications, and opt-in lockscreen task notices.
 
 The widget adds no telemetry. It reads provider CLI output and local task data; provider CLIs may contact their own services. Claude/GPT and Argon quotas come from Antigravity, without separate logins. Codex quotas do not represent ChatGPT conversation limits. See [data access and limitations](docs/usage.md#data-access-and-limitations).
@@ -54,7 +54,7 @@ cd usage-limit
 
 Another working provider can still supply usage data when one fails. Codex task links require Codex Desktop and its `codex://` URL handler. Reopening the widget restores and presents its existing instance.
 
-Claude Code support is tested with synthetic payloads; an authenticated Claude Code session has not been validated. Missing, stale, or reset quota windows remain unavailable.
+Claude Code support is tested with synthetic payloads; an authenticated Claude Code session has not been validated. Providers without valid quota data are hidden, including missing, stale, or reset Claude windows. A real 0% remaining quota stays visible.
 
 ## Optional GNOME/Ubuntu panel
 

@@ -233,8 +233,8 @@ def _draw_model_watermark(context: Any, limit: Any, color: str) -> None:
     context.restore()
 
 
-def control_at(x: float, y: float) -> Optional[str]:
-    if abs(x - PROVIDER_TOGGLE[0]) <= 41 and abs(y - PROVIDER_TOGGLE[1]) <= 11:
+def control_at(x: float, y: float, provider_count: int = 3) -> Optional[str]:
+    if provider_count > 1 and abs(x - PROVIDER_TOGGLE[0]) <= provider_count * 13 + 2 and abs(y - PROVIDER_TOGGLE[1]) <= 11:
         return "provider"
     for name, center in (
         ("passthrough", PASSTHROUGH_CONTROL),
@@ -445,22 +445,27 @@ def _draw_controls(
     active_provider: Optional[str],
     available_providers: set[str],
 ) -> None:
+    providers = [provider for provider in SUPPORTED_PROVIDERS if provider in available_providers]
+    if len(providers) < 2:
+        _draw_utility_controls(context, pinned, click_through, hovered, colors)
+        return
     toggle_x, toggle_y = PROVIDER_TOGGLE
-    toggle_hovered = hovered == "provider" and len(available_providers) > 1
-    _rounded_rectangle(context, toggle_x - 40, toggle_y - 10, 80, 20, 10)
+    toggle_hovered = hovered == "provider"
+    width = len(providers) * 26 + 2
+    _rounded_rectangle(context, toggle_x - width / 2, toggle_y - 10, width, 20, 10)
     _set_color(context, colors.control_hover if toggle_hovered else colors.control)
     context.fill()
-    for index, provider in enumerate(SUPPORTED_PROVIDERS):
-        left = toggle_x - 39 + index * 26
-        active, enabled = provider == active_provider, provider in available_providers
-        if active and enabled:
+    for index, provider in enumerate(providers):
+        left = toggle_x - len(providers) * 13 + index * 26
+        active = provider == active_provider
+        if active:
             _rounded_rectangle(context, left, toggle_y - 9, 26, 18, 8)
             _set_color(context, colors.control_active)
             context.fill()
-        color = colors.primary if active and enabled else colors.icon if enabled else colors.tertiary
+        color = colors.primary if active else colors.icon
         _draw_text(
             context,
-            ("C", "A", "CC")[index],
+            {"Codex": "C", "Antigravity": "A", "Claude Code": "CC"}[provider],
             toggle_y,
             "Sans Bold 8",
             color,

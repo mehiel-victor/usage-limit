@@ -60,7 +60,7 @@ python3 install_panel.py
 | Argon | Antigravity groups whose model names contain Argon. |
 | Claude Code | Direct status-line snapshot, kept separate from Antigravity's Claude/GPT group. |
 
-Each indicator shows its logo and the **lowest remaining percentage** across its group's windows/accounts. Unknown quotas show `—`. Text is green at 60% or more, amber at 30–59%, and red below 30%. Color is accompanied by the percentage; the menu provides names, individual windows, reset times, and refresh/open-widget/quit actions. The panel refreshes every five minutes.
+Each indicator shows its logo and the **lowest remaining percentage** across its group's windows/accounts. Groups without a valid quota response stay hidden, including at startup and after a source becomes unavailable. This does not infer subscriptions from installed CLIs. A known 0% remaining quota stays visible. Text is green at 60% or more, amber at 30–59%, and red below 30%. The menu provides names, individual windows, reset times, and refresh/open-widget/quit actions. The panel refreshes every five minutes.
 
 Logos and percentages are rendered together in 20-pixel-high images for Ubuntu AppIndicators. The launcher also searches `${XDG_DATA_HOME:-~/.local/share}/usage-limit/typelibs/` for typelibs when the native library is already installed. A typelib alone does not install that library.
 
@@ -85,7 +85,9 @@ The `Limites | Tarefas` control selects the view. Right-click to refresh, switch
 
 Drag across monitors or use `Mover para outro monitor` to cycle displays while preserving relative position. Resizing follows the current monitor's usable area and the view's aspect ratio. In click-through mode, the donut passes clicks to the desktop while the floating controls remain interactive.
 
-`Recolher na borda` shows **three black capsules at the monitor's left edge**. Each has a flat left side, rounded right end, vertical quota bar on the left, and a gray-backed circular provider mark on the right. Percentages remain in tooltips and the accessible description. Unknown quotas show a neutral bar with a dash; zero quota has an empty track. Transparent gaps and corners pass clicks through to the desktop.
+`Recolher na borda` shows **one black capsule per available provider at the monitor's left edge**. Each has a flat left side, rounded right end, vertical quota bar on the left, and a gray-backed circular provider mark on the right. Percentages remain in tooltips and the accessible description. Missing quotas have no capsule; zero quota remains visible with an empty track. Transparent gaps and corners pass clicks through to the desktop.
+
+The dock scales with the monitor's logical usable area, normally about 56–66 logical pixels wide, and grows only for providers that have data. It recomputes size when available providers or monitors change and also fits unusually small workareas. Without any quota data, the widget stays or returns expanded so you can refresh; it does not leave an invisible dock. Expanded provider controls also omit unavailable providers.
 
 Click a capsule to expand directly into that provider's usage view, even from the task view. Position and collapsed state persist; explicitly opening the app expands/restores and presents the existing GTK instance. The collapsed material stays black in both themes, while the expanded widget follows the system theme. `Esc` closes the widget.
 

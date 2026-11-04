@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from typing import Optional
 
-from collapsed_usage_view import COLLAPSED_HEIGHT, COLLAPSED_WIDTH, collapsed_accessible_label, left_edge_position
+from collapsed_usage_view import COLLAPSED_HEIGHT, COLLAPSED_WIDTH, collapsed_accessible_label, collapsed_geometry
 from usage_sources import SUPPORTED_PROVIDERS
 from usage_limit_view import MIN_WIDGET_SIZE, clamp_window_position, widget_height
 
@@ -24,6 +24,9 @@ class CollapsedWindowState:
     def _toggle_collapsed(self) -> None:
         if self._collapsed:
             self._expand_from_provider(self._active_provider or "Codex")
+            return
+        if not self._all_limits:
+            self.refresh(force=True)
             return
         x, y = self.get_position()
         width, height = self.get_size()
@@ -60,25 +63,31 @@ class CollapsedWindowState:
         origin: tuple[int, int],
         origin_size: Optional[tuple[int, int]] = None,
     ) -> tuple[int, int]:
+        if not self._all_limits:
+            self._expand_from_provider(self._active_provider or "Codex")
+            return self.get_position()
         width, height = origin_size or (COLLAPSED_WIDTH, COLLAPSED_HEIGHT)
-        docked = left_edge_position(
+        x, y, dock_width, dock_height = collapsed_geometry(
             origin[0],
             origin[1],
             width,
             height,
             self._monitor_workareas(),
+            self._all_limits,
         )
         self.set_resizable(False)
         self.set_skip_taskbar_hint(True)
-        self.set_size_request(COLLAPSED_WIDTH, COLLAPSED_HEIGHT)
-        self.area.set_size_request(COLLAPSED_WIDTH, COLLAPSED_HEIGHT)
-        self.resize(COLLAPSED_WIDTH, COLLAPSED_HEIGHT)
-        self.move(*docked)
+        self.set_size_request(dock_width, dock_height)
+        self.area.set_size_request(dock_width, dock_height)
+        if self.get_size() != (dock_width, dock_height):
+            self.resize(dock_width, dock_height)
+        if self.get_position() != (x, y):
+            self.move(x, y)
         self.area.get_accessible().set_name(collapsed_accessible_label(self._all_limits))
         self._apply_window_layer()
         GLib.idle_add(self._apply_input_region)
         self.area.queue_draw()
-        return docked
+        return x, y
 
     def _sync_collapse_menu_label(self) -> None:
         self._collapse_menu_item.set_label(

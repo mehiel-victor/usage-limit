@@ -194,7 +194,8 @@ class ClaudePresentationTests(unittest.TestCase):
                     self.assertEqual(result, expected)
 
     def test_third_capsule_and_expanded_toggle_are_clickable(self):
-        self.assertEqual(dock.provider_at(40, dock.CAPSULE_TOPS[-1] + 30), 'Claude Code')
+        limits = [sources.UsageLimit(name, name, '5h', 25) for name in sources.SUPPORTED_PROVIDERS]
+        self.assertEqual(dock.provider_at(40, dock.CAPSULE_TOPS[-1] + 30, limits), 'Claude Code')
         self.assertGreater(dock.COLLAPSED_HEIGHT, dock.CAPSULE_TOPS[-1] + dock.CAPSULE_HEIGHT)
         self.assertEqual(control_at(PROVIDER_TOGGLE[0] + 38, PROVIDER_TOGGLE[1]), 'provider')
 
