@@ -18,7 +18,7 @@ Widget flutuante para Linux com suporte a **Codex, Antigravity e Claude Code** e
 - **Limites visíveis:** percentuais restantes e horários de renovação; alterne entre provedores e janelas disponíveis.
 - **Tarefas do Codex:** veja tarefas recentes, abra a fila de tarefas ativas e retorne à conversa no Codex Desktop.
 - **Cotas na barra superior:** cinco grupos separados para Codex, Gemini, Claude/GPT do Antigravity, Gemini 4 Argon e uso direto do Claude Code.
-- **Modo compacto:** recolha o widget em três cápsulas de provedores na borda direita e clique para expandir.
+- **Modo compacto:** três cápsulas pretas na borda esquerda, com barra vertical e logo circular; clique para expandir.
 - **Controles e alertas:** fixação, passagem de cliques, redimensionamento, troca de monitor, posição salva, notificações de aprovação/saldo baixo e avisos opcionais no lockscreen.
 
 O widget não adiciona telemetria. Ele lê a saída das CLIs e dados locais de tarefas; as CLIs podem acessar os serviços dos respectivos provedores. As cotas Claude/GPT e Argon vêm do Antigravity, sem login separado. A cota do Codex não representa os limites das conversas do ChatGPT. Veja [acesso a dados e limitações](usage.md#data-access-and-limitations).

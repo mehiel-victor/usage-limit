@@ -18,7 +18,9 @@ from collapsed_usage_view import (
     draw_collapsed_widget,
     provider_at,
     provider_remaining,
-    right_edge_position,
+    collapsed_input_region,
+    collapsed_accessible_label,
+    left_edge_position,
 )
 from collapsed_window_state import CollapsedWindowState
 from usage_sources import (
@@ -185,6 +187,8 @@ class UsageLimitWidget(CollapsedWindowState, Gtk.Window if Gtk is not None else 
         self._selected_limit = max(0, min(self._selected_limit, len(self._limits) - 1))
         self._error = False
         self._critical_phase = False
+        if self._collapsed:
+            self.area.get_accessible().set_name(collapsed_accessible_label(self._all_limits))
         self.area.queue_draw()
 
     def _on_draw(self, _area: Any, context: Any) -> bool:
@@ -556,7 +560,7 @@ class UsageLimitWidget(CollapsedWindowState, Gtk.Window if Gtk is not None else 
         elif target == "resize":
             tooltip.set_text("Arraste para redimensionar até o limite da tela")
         elif target == "collapse":
-            tooltip.set_text("Recolher na borda direita")
+            tooltip.set_text("Recolher na borda esquerda")
         else:
             return False
         return True
@@ -703,7 +707,7 @@ class UsageLimitWidget(CollapsedWindowState, Gtk.Window if Gtk is not None else 
         x, y = self.get_position()
         width, height = self.get_size()
         if self._collapsed:
-            safe_x, safe_y = right_edge_position(
+            safe_x, safe_y = left_edge_position(
                 x,
                 y,
                 width,
@@ -757,7 +761,10 @@ class UsageLimitWidget(CollapsedWindowState, Gtk.Window if Gtk is not None else 
         if window is None:
             return False
         allocation = self.get_allocation()
-        if self._collapsed or not self._click_through:
+        if self._collapsed:
+            window.input_shape_combine_region(collapsed_input_region(allocation.width, allocation.height), 0, 0)
+            return False
+        if not self._click_through:
             full_region = cairo.Region(cairo.RectangleInt(0, 0, allocation.width, allocation.height))
             window.input_shape_combine_region(full_region, 0, 0)
             return False
@@ -911,6 +918,8 @@ class UsageLimitWidget(CollapsedWindowState, Gtk.Window if Gtk is not None else 
             self._active_provider = None
             self._selected_limit = 0
             self._critical_phase = False
+            if self._collapsed:
+                self.area.get_accessible().set_name(collapsed_accessible_label([]))
             self.area.queue_draw()
         return False
 

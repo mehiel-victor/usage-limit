@@ -85,7 +85,11 @@ The `Limites | Tarefas` control selects the view. Right-click to refresh, switch
 
 Drag across monitors or use `Mover para outro monitor` to cycle displays while preserving relative position. Resizing follows the current monitor's usable area and the view's aspect ratio. In click-through mode, the donut passes clicks to the desktop while the floating controls remain interactive.
 
-`Recolher na borda` shows **three provider capsules** at the monitor's right edge. Each keeps its logo, remaining percentage, and usage bar; unavailable quotas show `—`. Click a capsule to expand into that provider. Position and collapsed state persist; explicitly opening the app expands/restores and presents the existing GTK instance. Theme colors follow the system light/dark preference. `Esc` closes the widget.
+`Recolher na borda` shows **three black capsules at the monitor's left edge**. Each has a flat left side, rounded right end, vertical quota bar on the left, and a gray-backed circular provider mark on the right. Percentages remain in tooltips and the accessible description. Unknown quotas show a neutral bar with a dash; zero quota has an empty track. Transparent gaps and corners pass clicks through to the desktop.
+
+Click a capsule to expand directly into that provider's usage view, even from the task view. Position and collapsed state persist; explicitly opening the app expands/restores and presents the existing GTK instance. The collapsed material stays black in both themes, while the expanded widget follows the system theme. `Esc` closes the widget.
+
+![Collapsed interface rendered with fictitious provider quotas](../assets/collapsed-preview.png)
 
 The task view polls up to ten unarchived Codex tasks every three seconds through one persistent local app server. Unchanged rollout snapshots are cached. Native active, approval, user-input, and system-error states take precedence; inferred running/completed states are identified in tooltips.
 

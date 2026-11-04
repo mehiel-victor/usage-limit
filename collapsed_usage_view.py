@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
-"""Compact right-edge rendering for provider usage limits."""
+"""Left-edge provider capsules matching the compact reference layout."""
 
 from __future__ import annotations
 
 from pathlib import Path
+import math
 from typing import Any, Optional
 
-from usage_limit_view import _draw_text, _rounded_rectangle, _set_color, theme_colors, usage_color
+from usage_limit_view import _draw_text, _rounded_rectangle, _set_color, usage_color
 from usage_sources import SUPPORTED_PROVIDERS
 
 try:
@@ -23,13 +24,21 @@ try:
 except (ImportError, ValueError):
     Gdk = GdkPixbuf = GLib = None  # type: ignore[assignment]
 
-COLLAPSED_WIDTH = 86
-COLLAPSED_HEIGHT = 218
-CAPSULE_X = 8
+COLLAPSED_WIDTH = 96
+CAPSULE_X = 0
 CAPSULE_WIDTH = COLLAPSED_WIDTH - CAPSULE_X
-CAPSULE_HEIGHT = 66
-CAPSULE_GAP = 6
+CAPSULE_HEIGHT = 76
+CAPSULE_GAP = 8
 CAPSULE_TOPS = tuple(4 + index * (CAPSULE_HEIGHT + CAPSULE_GAP) for index in range(len(SUPPORTED_PROVIDERS)))
+COLLAPSED_HEIGHT = CAPSULE_TOPS[-1] + CAPSULE_HEIGHT + 4
+CAPSULE_COLOR = "#000000"
+CAPSULE_HOVER_COLOR = "#121212"
+LOGO_BACKGROUND = "#D3D3D3"
+TRACK_COLOR = "#333333"
+LOGO_CENTER_X = 58
+LOGO_RADIUS = 27
+LOGO_SIZE = 40
+BAR_X, BAR_WIDTH, BAR_HEIGHT = 11, 10, 54
 PROVIDERS = SUPPORTED_PROVIDERS
 ASSET_ROOT = Path(__file__).with_name("assets")
 
@@ -50,9 +59,9 @@ def _load_logo(name: str, size: int) -> Any:
 
 if GdkPixbuf is not None:
     PROVIDER_LOGOS = {
-        "Codex": _load_logo("openai-symbol.svg", 23),
-        "Antigravity": _load_logo("antigravity-icon.png", 25),
-        "Claude Code": _load_logo("panel-claude.png", 23),
+        "Codex": _load_logo("openai-symbol.svg", LOGO_SIZE * 3),
+        "Antigravity": _load_logo("antigravity-icon.png", LOGO_SIZE * 3),
+        "Claude Code": _load_logo("panel-claude.png", LOGO_SIZE * 3),
     }
 else:
     PROVIDER_LOGOS = {}
@@ -63,7 +72,10 @@ def provider_at(x: float, y: float) -> Optional[str]:
     if not CAPSULE_X <= x <= COLLAPSED_WIDTH:
         return None
     for provider, top in zip(PROVIDERS, CAPSULE_TOPS):
-        if top <= y <= top + CAPSULE_HEIGHT:
+        radius = CAPSULE_HEIGHT / 2
+        if top <= y <= top + CAPSULE_HEIGHT and (
+            x <= LOGO_CENTER_X or (x - LOGO_CENTER_X) ** 2 + (y - top - radius) ** 2 <= radius ** 2
+        ):
             return provider
     return None
 
@@ -74,14 +86,23 @@ def provider_remaining(limits: list[Any], provider: str) -> Optional[int]:
     return limit.remaining_percent if limit is not None else None
 
 
-def right_edge_position(
+def collapsed_accessible_label(limits: list[Any]) -> str:
+    values = []
+    for provider in PROVIDERS:
+        remaining = provider_remaining(limits, provider)
+        status = "indisponível" if remaining is None else f"{remaining}% restante"
+        values.append(f"{provider}: {status}")
+    return "Limites recolhidos. " + ". ".join(values) + ". Pressione Enter para expandir."
+
+
+def left_edge_position(
     x: int,
     y: int,
     width: int,
     height: int,
     workareas: list[tuple[int, int, int, int]],
 ) -> tuple[int, int]:
-    """Dock a compact window to the right edge of its current monitor."""
+    """Dock to the selected monitor's left workarea edge, including negative origins."""
     valid_areas = [area for area in workareas if area[2] > 0 and area[3] > 0]
     if not valid_areas:
         return x, y
@@ -92,16 +113,19 @@ def right_edge_position(
         overlap_height = max(0, min(y + height, area_y + area_height) - max(y, area_y))
         return overlap_width * overlap_height
 
-    area_x, area_y, area_width, area_height = max(valid_areas, key=overlap)
-    docked_x = area_x + area_width - COLLAPSED_WIDTH
+    area_x, area_y, area_width, area_height = max(
+        valid_areas,
+        key=lambda area: (overlap(area), area[0] <= x + width / 2 < area[0] + area[2]),
+    )
+    docked_x = area_x
     docked_y = max(area_y, min(y, area_y + area_height - COLLAPSED_HEIGHT))
     return docked_x, docked_y
 
 
 def _draw_logo(context: Any, provider: str, center_y: float) -> None:
     context.new_path()
-    _set_color(context, "#F7F9FC")
-    context.arc(33, center_y, 17, 0, 6.283185307179586)
+    _set_color(context, LOGO_BACKGROUND)
+    context.arc(LOGO_CENTER_X, center_y, LOGO_RADIUS, 0, math.tau)
     context.fill()
     logo = PROVIDER_LOGOS.get(provider)
     if logo is None or Gdk is None:
@@ -111,39 +135,62 @@ def _draw_logo(context: Any, provider: str, center_y: float) -> None:
             center_y,
             "Sans Bold 11",
             "#202124",
-            background_color="#F7F9FC",
-            center_x=33,
+            background_color=LOGO_BACKGROUND,
+            center_x=LOGO_CENTER_X,
         )
         return
     context.save()
-    Gdk.cairo_set_source_pixbuf(
-        context,
-        logo,
-        33 - logo.get_width() / 2,
-        center_y - logo.get_height() / 2,
-    )
+    scale = LOGO_SIZE / max(logo.get_width(), logo.get_height())
+    context.translate(LOGO_CENTER_X - logo.get_width() * scale / 2,
+                      center_y - logo.get_height() * scale / 2)
+    context.scale(scale, scale)
+    Gdk.cairo_set_source_pixbuf(context, logo, 0, 0)
     context.paint()
     context.restore()
 
 
-def _draw_usage_bar(context: Any, remaining: Optional[int], top: int, colors: Any) -> None:
-    track_x, track_y, track_width, track_height = 68, top + 12, 8, 42
-    _rounded_rectangle(context, track_x, track_y, track_width, track_height, 4)
-    _set_color(context, colors.track, 0.75)
+def _draw_usage_bar(context: Any, remaining: Optional[int], top: int) -> None:
+    track_y = top + (CAPSULE_HEIGHT - BAR_HEIGHT) / 2
+    _rounded_rectangle(context, BAR_X, track_y, BAR_WIDTH, BAR_HEIGHT, BAR_WIDTH / 2)
+    _set_color(context, TRACK_COLOR)
     context.fill()
-    if remaining is None or remaining <= 0:
+    if remaining is None:
+        _set_color(context, "#B3BAC7")
+        context.set_line_width(2)
+        context.move_to(BAR_X + 2, top + CAPSULE_HEIGHT / 2)
+        context.line_to(BAR_X + BAR_WIDTH - 2, top + CAPSULE_HEIGHT / 2)
+        context.stroke()
         return
-    fill_height = max(4, track_height * remaining / 100)
+    if remaining <= 0:
+        return
+    fill_height = max(4, BAR_HEIGHT * remaining / 100)
     _rounded_rectangle(
         context,
-        track_x,
-        track_y + track_height - fill_height,
-        track_width,
+        BAR_X,
+        track_y + BAR_HEIGHT - fill_height,
+        BAR_WIDTH,
         fill_height,
         4,
     )
     _set_color(context, usage_color(remaining))
     context.fill()
+
+
+def collapsed_input_region(width: int, height: int) -> Any:
+    """Let the desktop receive clicks in the transparent gaps and rounded corners."""
+    if width <= 0 or height <= 0:
+        return cairo.Region()
+    scale = min(width / COLLAPSED_WIDTH, height / COLLAPSED_HEIGHT)
+    region = cairo.Region()
+    radius = CAPSULE_HEIGHT / 2
+    for row in range(height):
+        y = (row + 0.5) / scale
+        top = next((top for top in CAPSULE_TOPS if top <= y < top + CAPSULE_HEIGHT), None)
+        if top is None:
+            continue
+        right = LOGO_CENTER_X + math.sqrt(max(0, radius ** 2 - (y - top - radius) ** 2))
+        region.union(cairo.Region(cairo.RectangleInt(0, row, math.ceil(right * scale), 1)))
+    return region
 
 
 def draw_collapsed_widget(
@@ -152,31 +199,20 @@ def draw_collapsed_widget(
     hovered_provider: Optional[str],
     dark_mode: bool,
 ) -> None:
-    """Render two provider ellipses with logos and rounded usage bars."""
-    colors = theme_colors(dark_mode)
+    """Render black D-shaped capsules, left quota bars, and gray-backed provider marks."""
     context.set_operator(cairo.OPERATOR_CLEAR)
     context.paint()
     context.set_operator(cairo.OPERATOR_OVER)
     for provider, top in zip(PROVIDERS, CAPSULE_TOPS):
         remaining = provider_remaining(limits, provider)
-        _rounded_rectangle(
-            context,
-            CAPSULE_X,
-            top,
-            CAPSULE_WIDTH,
-            CAPSULE_HEIGHT,
-            CAPSULE_HEIGHT / 2,
-        )
-        _set_color(context, colors.control_hover if hovered_provider == provider else colors.background, 0.97)
+        radius = CAPSULE_HEIGHT / 2
+        context.new_path()
+        context.move_to(0, top)
+        context.line_to(LOGO_CENTER_X, top)
+        context.arc(LOGO_CENTER_X, top + radius, radius, -math.pi / 2, math.pi / 2)
+        context.line_to(0, top + CAPSULE_HEIGHT)
+        context.close_path()
+        _set_color(context, CAPSULE_HOVER_COLOR if hovered_provider == provider else CAPSULE_COLOR)
         context.fill()
-        _draw_logo(context, provider, top + 25)
-        _draw_usage_bar(context, remaining, top, colors)
-        _draw_text(
-            context,
-            "—" if remaining is None else f"{remaining}%",
-            top + 51,
-            "Sans Bold 7",
-            colors.primary if remaining is not None else colors.tertiary,
-            background_color=colors.background,
-            center_x=33,
-        )
+        _draw_logo(context, provider, top + radius)
+        _draw_usage_bar(context, remaining, top)

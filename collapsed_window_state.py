@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-"""Window-state behavior for the compact right-edge usage dock."""
+"""Window-state behavior for the compact left-edge usage dock."""
 
 from __future__ import annotations
 
 from typing import Optional
 
-from collapsed_usage_view import COLLAPSED_HEIGHT, COLLAPSED_WIDTH, right_edge_position
+from collapsed_usage_view import COLLAPSED_HEIGHT, COLLAPSED_WIDTH, collapsed_accessible_label, left_edge_position
+from usage_sources import SUPPORTED_PROVIDERS
 from usage_limit_view import MIN_WIDGET_SIZE, clamp_window_position, widget_height
 
 try:
@@ -33,12 +34,12 @@ class CollapsedWindowState:
         self._save_position(docked)
 
     def _expand_from_provider(self, provider: str) -> None:
-        providers = {limit.provider for limit in self._all_limits}
-        if provider in providers:
+        if provider in SUPPORTED_PROVIDERS:
             self._active_provider = provider
             self._limits = [limit for limit in self._all_limits if limit.provider == provider]
             self._selected_limit = min(self._selected_limit, max(0, len(self._limits) - 1))
         self._collapsed = False
+        self._view_mode = "usage"
         self.set_skip_taskbar_hint(False)
         self.set_resizable(True)
         self.set_size_request(MIN_WIDGET_SIZE, widget_height(MIN_WIDGET_SIZE, self._view_mode))
@@ -60,7 +61,7 @@ class CollapsedWindowState:
         origin_size: Optional[tuple[int, int]] = None,
     ) -> tuple[int, int]:
         width, height = origin_size or (COLLAPSED_WIDTH, COLLAPSED_HEIGHT)
-        docked = right_edge_position(
+        docked = left_edge_position(
             origin[0],
             origin[1],
             width,
@@ -73,9 +74,7 @@ class CollapsedWindowState:
         self.area.set_size_request(COLLAPSED_WIDTH, COLLAPSED_HEIGHT)
         self.resize(COLLAPSED_WIDTH, COLLAPSED_HEIGHT)
         self.move(*docked)
-        self.area.get_accessible().set_name(
-            "Limites recolhidos de Codex, Antigravity e Claude Code; pressione Enter para expandir"
-        )
+        self.area.get_accessible().set_name(collapsed_accessible_label(self._all_limits))
         self._apply_window_layer()
         GLib.idle_add(self._apply_input_region)
         self.area.queue_draw()
@@ -89,7 +88,7 @@ class CollapsedWindowState:
     def _remember_expanded_position_on_monitor(self, target_x: int, target_y: int) -> None:
         if not self._collapsed:
             return
-        expanded_x = target_x + COLLAPSED_WIDTH - self._widget_size
+        expanded_x = target_x
         self._expanded_position = clamp_window_position(
             expanded_x,
             target_y,
