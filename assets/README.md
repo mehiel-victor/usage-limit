@@ -9,3 +9,10 @@
 
 The marks are displayed unchanged and remain trademarks of their respective
 owners.
+
+## Documentation previews
+
+`preview.png` and `preview-light.png` use the application's actual Cairo
+rendering functions with fictitious usage, tasks, and worktrees. They are
+illustrations of the interface, not screenshots of live accounts or a running
+desktop session. The interface text is currently in Portuguese.

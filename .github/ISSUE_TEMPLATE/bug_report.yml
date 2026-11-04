@@ -1,0 +1,33 @@
+name: Bug report / Relatar problema
+description: Report a reproducible problem. English or Portuguese welcome.
+title: "[BUG] "
+labels: [bug]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What happened? / O que aconteceu?
+      description: Describe the problem and what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce / Como reproduzir
+      placeholder: |
+        1. Launch the widget
+        2. ...
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment / Ambiente
+      description: Include distro, desktop, X11 or Wayland/XWayland, Python version, provider CLI version, and commit/release.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Logs or images / Logs ou imagens
+      description: Remove tokens, account details, task transcripts, and private paths before sharing. Identify sample data or redactions.

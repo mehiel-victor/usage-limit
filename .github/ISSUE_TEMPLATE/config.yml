@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Questions and ideas / Dúvidas e ideias
+    url: https://github.com/mehiel-victor/usage-limit/discussions
+    about: Discuss setup, compatibility, and possible contributions.
+  - name: Report a security vulnerability privately
+    url: https://github.com/mehiel-victor/usage-limit/security/advisories/new
+    about: Do not post credentials or undisclosed vulnerabilities in public issues.
